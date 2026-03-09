@@ -447,6 +447,9 @@ function OnboardingWizard({ onComplete }) {
   const [pPhone, setPPhone]         = useState("");
   const [pEmail, setPEmail]         = useState("");
   const [pAddress, setPAddress]     = useState("");
+  const [pPassword, setPPassword]   = useState("");
+  const [pPasswordC, setPPasswordC] = useState("");
+  const [showPw, setShowPw]         = useState(false);
 
   // Step 2 – Financial
   const [pSalary, setPSalary]       = useState("");
@@ -477,7 +480,7 @@ function OnboardingWizard({ onComplete }) {
     setTimeout(() => { setConnected(c=>({...c,[id]:true})); setConnecting(null); }, 1400);
   };
 
-  const isStep1Valid = () => pName.trim().length > 1 && pEmail.includes("@");
+  const isStep1Valid = () => pName.trim().length > 1 && pEmail.includes("@") && pPassword.length >= 6 && pPassword === pPasswordC;
   const isStep2Valid = () => parseFloat(pSalary) > 0;
 
   const buildFinalAssets = () => {
@@ -517,6 +520,7 @@ function OnboardingWizard({ onComplete }) {
       salary:parseFloat(pSalary)||0, monthlyExpenses:parseFloat(pExpenses)||(parseFloat(pSalary)*0.5),
       employer:pEmployer, household:parseInt(pHousehold)||2, riskTolerance:pRisk,
       goals:pGoals, joinDate: new Date().toISOString(),
+      passwordHash: btoa(unescape(encodeURIComponent(pPassword))),
     };
     onComplete({ profile, assets, liabs, connected });
   };
@@ -614,6 +618,41 @@ function OnboardingWizard({ onComplete }) {
               <OB_Input label="Home Address" value={pAddress} onChange={setPAddress} placeholder="123 Tampines Street 21, #08-45"/>
             </div>
           </div>
+          {/* ── Password section ── */}
+          <div style={{marginTop:16,padding:"14px 16px",background:"#fff5f5",borderRadius:12,border:"1px solid #fecaca"}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#dc2626",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+              🔒 Set a Password
+              <span style={{fontSize:9,fontWeight:500,color:"#9ca3af"}}>Used to protect your data and confirm resets</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{position:"relative"}}>
+                <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:5}}>
+                  Password <span style={{color:"#dc2626"}}>*</span>
+                  <span style={{fontSize:9,color:"#9ca3af",fontWeight:400}}> (min. 6 characters)</span>
+                </label>
+                <div style={{position:"relative"}}>
+                  <input type={showPw?"text":"password"} value={pPassword} onChange={e=>setPPassword(e.target.value)}
+                    placeholder="Enter password"
+                    style={{width:"100%",padding:"9px 36px 9px 11px",borderRadius:9,border:`1px solid ${pPassword.length>0&&pPassword.length<6?"#ef4444":"#e5e7eb"}`,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}/>
+                  <button type="button" onClick={()=>setShowPw(s=>!s)}
+                    style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"#9ca3af"}}>
+                    {showPw?"🙈":"👁"}
+                  </button>
+                </div>
+                {pPassword.length>0&&pPassword.length<6&&<div style={{fontSize:9,color:"#ef4444",marginTop:3}}>Must be at least 6 characters</div>}
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:5}}>
+                  Confirm Password <span style={{color:"#dc2626"}}>*</span>
+                </label>
+                <input type={showPw?"text":"password"} value={pPasswordC} onChange={e=>setPPasswordC(e.target.value)}
+                  placeholder="Repeat password"
+                  style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${pPasswordC.length>0&&pPassword!==pPasswordC?"#ef4444":"#e5e7eb"}`,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}/>
+                {pPasswordC.length>0&&pPassword!==pPasswordC&&<div style={{fontSize:9,color:"#ef4444",marginTop:3}}>Passwords do not match</div>}
+                {pPasswordC.length>0&&pPassword===pPasswordC&&pPassword.length>=6&&<div style={{fontSize:9,color:"#10b981",marginTop:3}}>✓ Passwords match</div>}
+              </div>
+            </div>
+          </div>
           <div style={{ display:"flex", gap:10, marginTop:8 }}>
             <button onClick={()=>setStep(0)} style={btnSecondary}>← Back</button>
             <button onClick={()=>isStep1Valid()&&setStep(2)} style={{ ...btnPrimary, flex:1,
@@ -621,7 +660,11 @@ function OnboardingWizard({ onComplete }) {
               Continue →
             </button>
           </div>
-          {!isStep1Valid() && <div style={{marginTop:8,fontSize:10,color:"#f87171",textAlign:"center"}}>Please enter your name and a valid email address to continue.</div>}
+          {!isStep1Valid() && <div style={{marginTop:8,fontSize:10,color:"#f87171",textAlign:"center"}}>
+            {!pName.trim()||!pEmail.includes("@") ? "Please enter your name and a valid email to continue." :
+             pPassword.length<6 ? "Password must be at least 6 characters." :
+             pPassword!==pPasswordC ? "Passwords do not match." : ""}
+          </div>}
         </div>
       )}
 
@@ -1001,6 +1044,8 @@ export default function App() {
   const [editLimit,     setEditLimit]     = useState(false);
   const [hovTooltip,    setHovTooltip]    = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetPwInput,    setResetPwInput]    = useState("");
+  const [resetPwError,    setResetPwError]    = useState("");
 
   // ── Load from localStorage on mount ──
   useEffect(() => {
@@ -1066,16 +1111,15 @@ export default function App() {
   const todayExp = expenses.filter(e=>e.date==="today").reduce((s,e)=>s+e.amount,0);
 
   // ── Theme ──
-  const proSidebarBg="linear-gradient(180deg,#1a0505 0%,#2d0808 100%)";
-  const proTopBand  ="linear-gradient(135deg,#7f1d1d 0%,#991b1b 50%,#b91c1c 100%)";
-  const bg    = pro ? "#fff5f5" : "#f1f5f9";
-  const card  = pro ? "#fff8f8" : "#ffffff";
-  const bdr   = pro ? "#fecaca" : "#e2e8f0";
-  const txt   = pro ? "#1a0505" : "#0f172a";
-  const sub   = pro ? "#7f1d1d" : "#64748b";
-  const sidebarBg   = pro ? proSidebarBg    : "#1e3a8a";
-  const topBand     = pro ? proTopBand      : "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 60%,#60a5fa 100%)";
-  const accentPrimary = pro ? "#dc2626" : "#1d4ed8";
+  // ── Theme (static — pro toggle only affects the Insights tab) ──
+  const bg           = "#f1f5f9";
+  const card         = "#ffffff";
+  const bdr          = "#e2e8f0";
+  const txt          = "#0f172a";
+  const sub          = "#64748b";
+  const sidebarBg    = "#1e3a8a";
+  const topBand      = "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 60%,#60a5fa 100%)";
+  const accentPrimary = "#1d4ed8";
 
   // ── Scenario impact ──
   const calcImpact = () => {
@@ -1197,11 +1241,7 @@ export default function App() {
               <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>Financial Hub · SG</div>
             </div>
           </div>
-          <div style={{background:"rgba(0,0,0,0.25)",borderRadius:8,padding:3,display:"flex",gap:2}}>
-            {["Investor","Pro"].map(m=>(
-              <button key={m} onClick={()=>setPro(m==="Pro")} style={{flex:1,padding:"6px 0",borderRadius:6,border:"none",fontSize:10,fontWeight:700,fontFamily:"'Sora',sans-serif",background:(m==="Pro")===pro?"rgba(255,255,255,0.22)":"transparent",color:"white",cursor:"pointer",transition:"all 0.25s"}}>{m}</button>
-            ))}
-          </div>
+
         </div>
         <nav style={{flex:1,padding:"0 9px",display:"flex",flexDirection:"column",gap:1}}>
           {NAV.map(n=>(
@@ -1250,7 +1290,7 @@ export default function App() {
           {/* New Profile / Reset button */}
           {!showResetConfirm ? (
             <button
-              onClick={()=>setShowResetConfirm(true)}
+              onClick={()=>{setShowResetConfirm(true);setResetPwInput("");setResetPwError("");}}
               style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.2s"}}
               onMouseEnter={e=>{e.currentTarget.style.background="rgba(220,38,38,0.25)";e.currentTarget.style.borderColor="rgba(220,38,38,0.5)";e.currentTarget.style.color="white";}}
               onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.borderColor="rgba(255,255,255,0.18)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}
@@ -1259,18 +1299,37 @@ export default function App() {
             </button>
           ) : (
             <div style={{background:"rgba(220,38,38,0.18)",border:"1px solid rgba(220,38,38,0.45)",borderRadius:10,padding:"10px 11px"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#fca5a5",marginBottom:8,lineHeight:1.4}}>
-                ⚠️ This will clear all your data and return to the welcome screen.
+              <div style={{fontSize:10,fontWeight:700,color:"#fca5a5",marginBottom:6,lineHeight:1.4}}>
+                🔒 Enter your password to confirm reset
+              </div>
+              <div style={{fontSize:9,color:"rgba(255,200,200,0.7)",marginBottom:8,lineHeight:1.4}}>
+                ⚠️ This will permanently clear all your data.
+              </div>
+              <div style={{position:"relative",marginBottom:6}}>
+                <input
+                  type="password"
+                  value={resetPwInput}
+                  onChange={e=>{setResetPwInput(e.target.value);setResetPwError("");}}
+                  placeholder="Your password"
+                  style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${resetPwError?"#f87171":"rgba(255,255,255,0.2)"}`,background:"rgba(0,0,0,0.3)",color:"white",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}
+                />
+                {resetPwError&&<div style={{fontSize:9,color:"#f87171",marginTop:3}}>{resetPwError}</div>}
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button
-                  onClick={()=>setShowResetConfirm(false)}
+                  onClick={()=>{setShowResetConfirm(false);setResetPwInput("");setResetPwError("");}}
                   style={{flex:1,padding:"6px 0",borderRadius:7,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
                 >Cancel</button>
                 <button
-                  onClick={()=>{ localStorage.removeItem(STORAGE_KEY); window.location.reload(); }}
+                  onClick={()=>{
+                    const stored = profile?.passwordHash;
+                    const entered = btoa(unescape(encodeURIComponent(resetPwInput)));
+                    if(!stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); return; }
+                    if(entered===stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); }
+                    else { setResetPwError("Incorrect password. Try again."); }
+                  }}
                   style={{flex:2,padding:"6px 0",borderRadius:7,border:"none",background:"#dc2626",color:"white",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                >Yes, Reset</button>
+                >Confirm Reset</button>
               </div>
             </div>
           )}
@@ -1303,7 +1362,7 @@ export default function App() {
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11,marginBottom:11}}>
                 <div className="hov" style={{background:card,borderRadius:15,padding:18,border:`1px solid ${bdr}`,display:"flex",gap:16,alignItems:"center",transition:"all .3s"}}>
-                  <Ring score={wellness} size={115} dark={pro}/>
+                  <Ring score={wellness} size={115} dark={false}/>
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,fontWeight:800,color:txt,marginBottom:3}}>Wealth Wellness Score</div>
                     <div style={{fontSize:11,color:sub,marginBottom:9}}>Based on {METRICS.length} financial health metrics</div>
@@ -1427,7 +1486,24 @@ export default function App() {
           {/* ══ INSIGHTS ══ */}
           {screen==="insights"&&(
             <div className="sc">
-              <div style={{marginBottom:13}}><Lbl style={{color:"rgba(255,255,255,0.65)"}}>Why Your Score Is {wellness}</Lbl><h1 style={{fontSize:23,fontWeight:800,color:"white"}}>Insights</h1></div>
+              <div style={{marginBottom:13,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+                <div>
+                  <Lbl style={{color:"rgba(255,255,255,0.65)"}}>Why Your Score Is {wellness}</Lbl>
+                  <h1 style={{fontSize:23,fontWeight:800,color:"white"}}>Insights</h1>
+                </div>
+                {/* Investor / Pro toggle — top-right of Insights only */}
+                <div style={{display:"flex",background:"rgba(0,0,0,0.22)",borderRadius:9,padding:3,gap:2}}>
+                  {["Investor","Pro"].map(m=>(
+                    <button key={m} onClick={()=>setPro(m==="Pro")}
+                      style={{padding:"6px 16px",borderRadius:7,border:"none",fontSize:10,fontWeight:700,
+                        fontFamily:"'Sora',sans-serif",cursor:"pointer",transition:"all 0.2s",
+                        background:(m==="Pro")===pro?"rgba(255,255,255,0.9)":"transparent",
+                        color:(m==="Pro")===pro?"#1d4ed8":"rgba(255,255,255,0.7)"}}>
+                      {m==="Pro"?"⬡ Pro":"◎ Investor"}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9,marginBottom:11}}>
                 {METRICS.map((m,i)=>(
                   <div key={i} className="hov" style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,borderLeft:`4px solid ${m.color}`,transition:"all .3s"}}>
@@ -1442,31 +1518,140 @@ export default function App() {
                 ))}
               </div>
               {pro&&(
-                <div style={{background:"linear-gradient(135deg,#1a0505,#2d0808)",borderRadius:15,padding:20,border:"1px solid #7f1d1d",marginBottom:11}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-                    <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>BLOOMBERG PRO</div>
-                    <div style={{fontSize:12,fontWeight:800,color:"#fef2f2"}}>Advanced Risk & Performance Analytics</div>
-                    <div style={{fontSize:9,color:"#fca5a5",marginLeft:"auto"}}>Hover metrics for explanation</div>
+                <>
+                  {/* Bloomberg Pro analytics panel */}
+                  <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",borderRadius:15,padding:20,border:"1px solid #334155",marginBottom:11}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                      <div style={{background:"linear-gradient(135deg,#1d4ed8,#6366f1)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                      <div style={{fontSize:12,fontWeight:800,color:"#f1f5f9"}}>Advanced Risk & Performance Analytics</div>
+                      <div style={{fontSize:9,color:"#94a3b8",marginLeft:"auto"}}>Hover metrics for explanation</div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                      {PRO_METRICS.map((m,i)=>(
+                        <div key={i} onMouseEnter={()=>setHovTooltip(i)} onMouseLeave={()=>setHovTooltip(null)}
+                          style={{background:"#0f172a",borderRadius:10,padding:12,border:"1px solid",cursor:"default",position:"relative",transition:"border-color 0.2s",borderColor:hovTooltip===i?"#6366f1":"#1e293b"}}>
+                          <div style={{fontSize:8,color:"#94a3b8",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.7}}>{m.label}</div>
+                          <div style={{fontSize:18,fontWeight:800,color:m.color,fontFamily:"'Courier New',monospace"}}>{m.value}</div>
+                          <div style={{fontSize:8,color:"#475569",marginTop:3,fontWeight:600}}>{m.sub}</div>
+                          {m.good===true&&<div style={{position:"absolute",top:7,right:8,width:6,height:6,borderRadius:"50%",background:"#10b981"}}/>}
+                          {m.good===false&&<div style={{position:"absolute",top:7,right:8,width:6,height:6,borderRadius:"50%",background:"#ef4444"}}/>}
+                          {hovTooltip===i&&(
+                            <div style={{position:"absolute",bottom:"110%",left:"50%",transform:"translateX(-50%)",background:"#0f172a",border:"1px solid #6366f1",borderRadius:8,padding:"8px 11px",fontSize:10,color:"#f1f5f9",lineHeight:1.5,width:200,zIndex:50,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                              {m.tooltip}
+                              <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"5px solid transparent",borderTopColor:"#6366f1"}}/>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-                    {PRO_METRICS.map((m,i)=>(
-                      <div key={i} onMouseEnter={()=>setHovTooltip(i)} onMouseLeave={()=>setHovTooltip(null)}
-                        style={{background:"#0f0000",borderRadius:10,padding:12,border:"1px solid #3d0a0a",cursor:"default",position:"relative",transition:"border-color 0.2s",borderColor:hovTooltip===i?"#dc2626":"#3d0a0a"}}>
-                        <div style={{fontSize:8,color:"#fca5a5",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.7}}>{m.label}</div>
-                        <div style={{fontSize:18,fontWeight:800,color:m.color,fontFamily:"'Courier New',monospace"}}>{m.value}</div>
-                        <div style={{fontSize:8,color:"#7f1d1d",marginTop:3,fontWeight:600}}>{m.sub}</div>
-                        {m.good===true&&<div style={{position:"absolute",top:7,right:8,width:6,height:6,borderRadius:"50%",background:"#10b981"}}/>}
-                        {m.good===false&&<div style={{position:"absolute",top:7,right:8,width:6,height:6,borderRadius:"50%",background:"#ef4444"}}/>}
-                        {hovTooltip===i&&(
-                          <div style={{position:"absolute",bottom:"110%",left:"50%",transform:"translateX(-50%)",background:"#1a0505",border:"1px solid #dc2626",borderRadius:8,padding:"8px 11px",fontSize:10,color:"#fef2f2",lineHeight:1.5,width:200,zIndex:50,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
-                            {m.tooltip}
-                            <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"5px solid transparent",borderTopColor:"#dc2626"}}/>
+
+                  {/* Balance Sheet Generator */}
+                  {(()=>{
+                    const bsDate = new Date().toLocaleDateString("en-SG",{day:"2-digit",month:"long",year:"numeric"});
+                    const assetsByCategory = Object.entries(
+                      assets.reduce((acc,a)=>({...acc,[a.category]:(acc[a.category]||0)+a.value}),{})
+                    ).sort((a,b)=>b[1]-a[1]);
+                    const liabsByCategory = Object.entries(
+                      liabs.reduce((acc,l)=>({...acc,[l.category]:(acc[l.category]||0)+l.value}),{})
+                    ).sort((a,b)=>b[1]-a[1]);
+                    const savingsRate = Math.max(0,Math.round((1-(profile.monthlyExpenses||0)/(profile.salary||1))*100));
+                    const monthlySavings = Math.max(0,(profile.salary||0)-(profile.monthlyExpenses||0));
+                    return (
+                      <div style={{background:"white",borderRadius:15,padding:24,border:"2px solid #1d4ed8",marginBottom:11,fontFamily:"'Sora',sans-serif"}}>
+                        {/* Header */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:14,borderBottom:"2px solid #1d4ed8"}}>
+                          <div>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                              <div style={{background:"linear-gradient(135deg,#1d4ed8,#6366f1)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                              <span style={{fontSize:10,fontWeight:700,color:"#64748b",letterSpacing:1,textTransform:"uppercase"}}>Statement of Financial Position</span>
+                            </div>
+                            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>{profile.name||"WealthWell User"}</div>
+                            <div style={{fontSize:10,color:"#64748b",marginTop:2}}>As at {bsDate} · All figures in {cur.code}</div>
                           </div>
-                        )}
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>Net Worth</div>
+                            <div style={{fontSize:26,fontWeight:800,color:netWorth>=0?"#10b981":"#ef4444"}}>{fc(netWorth,cur)}</div>
+                            <div style={{fontSize:9,color:"#64748b"}}>Wellness Score: <strong style={{color:"#1d4ed8"}}>{wellness}/100</strong></div>
+                          </div>
+                        </div>
+
+                        {/* Two-column balance sheet */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
+                          {/* ASSETS */}
+                          <div>
+                            <div style={{fontSize:11,fontWeight:800,color:"#10b981",textTransform:"uppercase",letterSpacing:1,marginBottom:10,paddingBottom:6,borderBottom:"1px solid #e2e8f0"}}>Assets</div>
+                            {assetsByCategory.length===0
+                              ? <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>No assets recorded</div>
+                              : assetsByCategory.map(([cat,val],i)=>(
+                                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                    <div style={{width:8,height:8,borderRadius:2,background:ASSET_COLORS[cat]||"#94a3b8",flexShrink:0}}/>
+                                    <span style={{fontSize:10,color:"#374151",fontWeight:600}}>{cat}</span>
+                                  </div>
+                                  <span style={{fontSize:10,fontWeight:700,color:"#0f172a",fontFamily:"'Courier New',monospace"}}>{fc(val,cur)}</span>
+                                </div>
+                              ))
+                            }
+                            <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:8,borderTop:"2px solid #10b981"}}>
+                              <span style={{fontSize:11,fontWeight:800,color:"#10b981"}}>TOTAL ASSETS</span>
+                              <span style={{fontSize:12,fontWeight:800,color:"#10b981",fontFamily:"'Courier New',monospace"}}>{fc(totalA,cur)}</span>
+                            </div>
+                          </div>
+
+                          {/* LIABILITIES + EQUITY */}
+                          <div>
+                            <div style={{fontSize:11,fontWeight:800,color:"#ef4444",textTransform:"uppercase",letterSpacing:1,marginBottom:10,paddingBottom:6,borderBottom:"1px solid #e2e8f0"}}>Liabilities</div>
+                            {liabsByCategory.length===0
+                              ? <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>No liabilities recorded</div>
+                              : liabsByCategory.map(([cat,val],i)=>(
+                                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                    <div style={{width:8,height:8,borderRadius:2,background:"#ef4444",flexShrink:0}}/>
+                                    <span style={{fontSize:10,color:"#374151",fontWeight:600}}>{cat}</span>
+                                  </div>
+                                  <span style={{fontSize:10,fontWeight:700,color:"#ef4444",fontFamily:"'Courier New',monospace"}}>({fc(val,cur)})</span>
+                                </div>
+                              ))
+                            }
+                            <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:8,borderTop:"2px solid #ef4444"}}>
+                              <span style={{fontSize:11,fontWeight:800,color:"#ef4444"}}>TOTAL LIABILITIES</span>
+                              <span style={{fontSize:12,fontWeight:800,color:"#ef4444",fontFamily:"'Courier New',monospace"}}>({fc(totalL,cur)})</span>
+                            </div>
+                            <div style={{display:"flex",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"2px solid #1d4ed8",background:"#eff6ff",borderRadius:6,padding:"8px 10px",marginTop:10}}>
+                              <span style={{fontSize:11,fontWeight:800,color:"#1d4ed8"}}>NET WORTH (EQUITY)</span>
+                              <span style={{fontSize:12,fontWeight:800,color:netWorth>=0?"#10b981":"#ef4444",fontFamily:"'Courier New',monospace"}}>{fc(netWorth,cur)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Income & cash flow summary */}
+                        <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid #e2e8f0"}}>
+                          <div style={{fontSize:11,fontWeight:800,color:"#0f172a",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Monthly Cash Flow Summary</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                            {[
+                              {l:"Gross Income",  v:fc(profile.salary||0,cur),    c:"#10b981"},
+                              {l:"Total Expenses",v:fc(profile.monthlyExpenses||(profile.salary||0)*0.5,cur), c:"#ef4444"},
+                              {l:"Net Savings",   v:fc(monthlySavings,cur),       c:monthlySavings>=0?"#10b981":"#ef4444"},
+                              {l:"Savings Rate",  v:`${savingsRate}%`,            c:savingsRate>=20?"#10b981":"#f59e0b"},
+                            ].map((x,i)=>(
+                              <div key={i} style={{background:"#f8fafc",borderRadius:9,padding:"10px 12px",border:"1px solid #e2e8f0",borderTop:`3px solid ${x.c}`}}>
+                                <div style={{fontSize:9,fontWeight:700,color:"#64748b",marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>{x.l}</div>
+                                <div style={{fontSize:14,fontWeight:800,color:x.c,fontFamily:"'Courier New',monospace"}}>{x.v}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Footer note */}
+                        <div style={{marginTop:14,paddingTop:10,borderTop:"1px solid #e2e8f0",fontSize:9,color:"#94a3b8",display:"flex",justifyContent:"space-between"}}>
+                          <span>Generated by WealthWell Pro · {bsDate}</span>
+                          <span>All figures are self-reported estimates · Not a substitute for professional financial advice</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    );
+                  })()}
+                </>
               )}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
                 <div className="hov" style={{background:card,borderRadius:13,padding:18,border:`1px solid ${bdr}`,transition:"all .3s"}}>
