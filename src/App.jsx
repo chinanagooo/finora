@@ -24,7 +24,6 @@ const GOALS_OPTS  = ["Retirement","Buying Property","Children's Education","Emer
 const ASSET_COLORS = {"Cash & Deposits":"#06b6d4","Stocks & ETFs":"#6366f1","Real Estate":"#10b981","Cryptocurrency":"#f59e0b","Commodities":"#eab308","Private Equity":"#8b5cf6","Retirement (CPF)":"#ec4899","Art & Collectibles":"#f97316","Other":"#94a3b8"};
 const ASSET_ICONS  = {"Cash & Deposits":"💵","Stocks & ETFs":"📈","Real Estate":"🏠","Cryptocurrency":"₿","Commodities":"🥇","Private Equity":"🏢","Retirement (CPF)":"🏛️","Art & Collectibles":"🖼️","Other":"💼"};
 
-// Onboarding asset suggestions
 const ASSET_SUGGESTIONS = [
   { icon:"🏦", name:"DBS/POSB Savings Account",   category:"Cash & Deposits",   color:"#06b6d4", placeholder:"25000"  },
   { icon:"🏛️", name:"CPF Ordinary Account",        category:"Retirement (CPF)",  color:"#ec4899", placeholder:"85000"  },
@@ -53,11 +52,9 @@ const CONNECTED_PLATFORMS = [
 ];
 
 const SCENARIOS_DEF = [
-  // Scenario Engine (shocks)
   { id:"crash",    label:"Market Crash",         icon:"📉", color:"#ef4444", bg:"#fff1f0", desc:"Stocks×0.8 · Crypto×0.7 · Gold×1.05",  type:"shock"    },
   { id:"jobloss",  label:"Job Loss",             icon:"💼", color:"#f97316", bg:"#fff7ed", desc:"Income→0 · Cash−(3×expenses)",           type:"shock"    },
   { id:"property", label:"Property Purchase",    icon:"🏠", color:"#06b6d4", bg:"#ecfeff", desc:"Cash−15K · Mortgage+50K · Property+50K", type:"shock"    },
-  // Decision Simulator (positive actions)
   { id:"fund",     label:"Boost Emergency Fund", icon:"🏦", color:"#10b981", bg:"#f0fdf4", desc:"Cash+8000 — improves liquidity",          type:"decision" },
   { id:"diversify",label:"Diversify Portfolio",  icon:"📊", color:"#6366f1", bg:"#f5f3ff", desc:"Stocks×0.9 · Gold×1.2 · Cash×1.1",       type:"decision" },
   { id:"debtpay",  label:"Reduce Debt",          icon:"💳", color:"#8b5cf6", bg:"#faf5ff", desc:"Loan−10K · Credit−5K",                   type:"decision" },
@@ -113,14 +110,7 @@ const fc = (v, cur, short=false) => {
 const sc = s => s>=75?"#10b981":s>=55?"#f59e0b":"#ef4444";
 const sl = s => s>=75?"Excellent":s>=60?"Good":s>=45?"Fair":"Needs Work";
 
-// ─── METRICS ENGINE — aligned to Logic.docx ───────────────────────────────────
-// Asset category mappings to doc buckets:
-//   Cash    → "Cash & Deposits"
-//   Stocks  → "Stocks & ETFs"
-//   Property→ "Real Estate"
-//   Crypto  → "Cryptocurrency"
-//   Gold    → "Commodities" | "Private Equity" | "Retirement (CPF)" | "Art & Collectibles" | "Other"
-
+// ─── METRICS ENGINE ───────────────────────────────────────────────────────────
 const computeWellness = (assets, liabs, profile) => {
   const totalA   = assets.reduce((s,a)=>s+a.value,0);
   const totalL   = liabs.reduce((s,l)=>s+l.value,0);
@@ -129,19 +119,15 @@ const computeWellness = (assets, liabs, profile) => {
   const insurance= parseFloat(profile.insuranceCoverage) || 0;
   const risk     = profile.riskTolerance || "Moderate";
 
-  // Asset buckets
   const cashA   = assets.filter(a=>a.category==="Cash & Deposits").reduce((s,a)=>s+a.value,0);
   const stocksA = assets.filter(a=>a.category==="Stocks & ETFs").reduce((s,a)=>s+a.value,0);
   const propA   = assets.filter(a=>a.category==="Real Estate").reduce((s,a)=>s+a.value,0);
   const cryptoA = assets.filter(a=>a.category==="Cryptocurrency").reduce((s,a)=>s+a.value,0);
-  // Gold bucket = everything else (Commodities, CPF, PE, Art, Other)
   const goldA   = assets.filter(a=>!["Cash & Deposits","Stocks & ETFs","Real Estate","Cryptocurrency"].includes(a.category)).reduce((s,a)=>s+a.value,0);
 
-  // ── 1. Liquidity Score: ((Cash / Expenses) / 6) × 100, clamped 0–100
   const liqMonths = expenses > 0 ? cashA / expenses : 0;
   const liquidity = Math.min(100, Math.max(0, Math.round((liqMonths / 6) * 100)));
 
-  // ── 2. Diversification Score: start 100, apply penalties, clamp 0–100
   let diversification = 100;
   if (totalA > 0) {
     const shares = [cashA, stocksA, propA, cryptoA, goldA].map(v=>v/totalA);
@@ -154,8 +140,6 @@ const computeWellness = (assets, liabs, profile) => {
   }
   diversification = Math.min(100, Math.max(0, diversification));
 
-  // ── 3. Volatility Score: 100 − (RiskExposure × 100), clamped 0–100
-  //    Weights: Cash 0.1 | Gold 0.3 | Property 0.4 | Stocks 0.6 | Crypto 0.9
   let volatility = 50;
   if (totalA > 0) {
     const riskExp =
@@ -167,27 +151,20 @@ const computeWellness = (assets, liabs, profile) => {
     volatility = Math.min(100, Math.max(0, Math.round(100 - riskExp * 100)));
   }
 
-  // ── 4. Debt Load Score: 100 − (TotalDebt / TotalAssets × 100), clamped 0–100
   const debtRatio = totalA > 0 ? totalL / totalA : (totalL > 0 ? 1 : 0);
   const debtLoad  = Math.min(100, Math.max(0, Math.round(100 - debtRatio * 100)));
 
-  // ── 5. Protection Score: CoverageRatio = Insurance / AnnualIncome
-  //    <3 → 40 | 3–6 → 70 | ≥6 → 90
   const annualIncome  = salary * 12;
   const coverageRatio = annualIncome > 0 ? insurance / annualIncome : 0;
   const protection    = coverageRatio >= 6 ? 90 : coverageRatio >= 3 ? 70 : 40;
 
-  // ── 6. Behaviour Score: base 80, penalties: crypto>30% −10, Aggressive −10; clamp 30–100
   let behaviour = 80;
   if (totalA > 0 && cryptoA / totalA > 0.30) behaviour -= 10;
   if (risk === "Aggressive") behaviour -= 10;
   behaviour = Math.min(100, Math.max(30, behaviour));
 
-  // ── 7. Income Stability Score: Conservative 85 | Balanced/Moderate 80 | Aggressive 60
   const incomeStability = risk === "Conservative" ? 85 : risk === "Aggressive" ? 60 : 80;
 
-  // ── 8. Finora Wellness Score (overall)
-  //    0.25×Liq + 0.20×Div + 0.15×Vol + 0.15×Debt + 0.10×Prot + 0.10×Beh + 0.05×Inc
   const overall = Math.round(
     0.25 * liquidity +
     0.20 * diversification +
@@ -198,8 +175,6 @@ const computeWellness = (assets, liabs, profile) => {
     0.05 * incomeStability
   );
 
-  // ── 9. Financial Resilience Score
-  //    0.30×Liq + 0.20×Debt + 0.20×Div + 0.15×Inc + 0.10×Prot + 0.05×Beh
   const resilience = Math.round(
     0.30 * liquidity +
     0.20 * debtLoad +
@@ -209,10 +184,8 @@ const computeWellness = (assets, liabs, profile) => {
     0.05 * behaviour
   );
 
-  // ── 10. Fragility Classification: ≥75 Low | 50–74 Moderate | <50 High
   const fragility = resilience >= 75 ? "Low" : resilience >= 50 ? "Moderate" : "High";
 
-  // ── 11. Confidence Score: start 100, deduct for missing data
   let confidence = 100;
   if (!expenses || expenses <= 0)                                          confidence -= 20;
   if (assets.length === 0)                                                 confidence -= 20;
@@ -223,7 +196,6 @@ const computeWellness = (assets, liabs, profile) => {
   confidence = Math.max(0, confidence);
   const confidenceLabel = confidence >= 80 ? "High" : confidence >= 50 ? "Medium" : "Low";
 
-  // ── 12. Survival Runway: Cash / Monthly Expenses
   const survivalMonths = expenses > 0 ? cashA / expenses : 0;
   const survivalLabel  = survivalMonths >= 6 ? "Strong runway" : survivalMonths >= 3 ? "Moderate runway" : "Fragile runway";
 
@@ -235,11 +207,10 @@ const computeWellness = (assets, liabs, profile) => {
     confidence,   confidenceLabel,
     survivalMonths: parseFloat(survivalMonths.toFixed(1)),
     survivalLabel,
-    // convenience aliases
     liqMonths:     liqMonths.toFixed(1),
     debtRatioPct:  (debtRatio * 100).toFixed(1),
     coverageRatio: coverageRatio.toFixed(1),
-    debt: debtLoad,   // backward-compat alias
+    debt: debtLoad,
   };
 };
 
@@ -282,7 +253,6 @@ const buildActions = (scores, assets, liabs, profile) => {
   const cash     = assets.filter(a=>a.category==="Cash & Deposits").reduce((s,a)=>s+a.value,0);
   const actions  = [];
 
-  // Rec 1: Liquidity < 60 → increase emergency fund
   if (scores.liquidity < 60)
     actions.push({ id:1, priority:1, icon:"🏦", title:"Increase Emergency Fund",
       category:"Liquidity", color:"#f59e0b", scenarioTag:"Job Loss",
@@ -291,7 +261,6 @@ const buildActions = (scores, assets, liabs, profile) => {
       action:`Add ${fc(Math.max(0,expenses*6-cash),SGD)} to a high-yield savings account like DBS Multiplier`,
       outcome:`Liquidity Score: ${scores.liquidity} → ~100`, impact:"+pts" });
 
-  // Rec 2: Diversification < 70 → diversify
   if (scores.diversification < 70)
     actions.push({ id:2, priority:2, icon:"📊", title:"Diversify Holdings",
       category:"Diversification", color:"#6366f1", scenarioTag:"Market Crash",
@@ -300,7 +269,6 @@ const buildActions = (scores, assets, liabs, profile) => {
       action:"Rebalance so no single asset exceeds 50% of portfolio; keep crypto under 30%",
       outcome:`Diversification Score: ${scores.diversification} → 100`, impact:"+pts" });
 
-  // Rec 3: Debt Load < 70 → reduce debt
   if (scores.debtLoad < 70)
     actions.push({ id:3, priority:3, icon:"💳", title:"Reduce Debt",
       category:"Debt Load", color:"#ef4444", scenarioTag:"Rate Hike",
@@ -309,7 +277,6 @@ const buildActions = (scores, assets, liabs, profile) => {
       action:"Prioritise paying down high-interest loans and credit card balances first",
       outcome:`Debt Load Score: ${scores.debtLoad} → improves with each payment`, impact:"+pts" });
 
-  // Rec 4: Protection < 60 → review insurance
   if (scores.protection < 60)
     actions.push({ id:4, priority:4, icon:"🛡️", title:"Review Insurance Coverage",
       category:"Protection", color:"#8b5cf6", scenarioTag:"Protection",
@@ -534,25 +501,21 @@ function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
         input:focus{border-color:#dc2626!important;outline:none!important;box-shadow:0 0 0 3px rgba(220,38,38,0.12)!important;}
       `}</style>
 
-      {/* Create account — small button top-right corner */}
       <div style={{ position:"absolute", top:20, right:24, display:"flex", alignItems:"center", gap:10 }}>
         <span style={{ fontSize:11, color:"#9ca3af" }}>New to Finora?</span>
         <button onClick={onCreateAccount}
           style={{ padding:"7px 16px", borderRadius:99, border:"1.5px solid #dc2626",
             background:"transparent", color:"#dc2626", fontSize:11, fontWeight:700,
-            cursor:"pointer", fontFamily:"'Sora',sans-serif", transition:"all 0.2s",
-            whiteSpace:"nowrap" }}
+            cursor:"pointer", fontFamily:"'Sora',sans-serif", transition:"all 0.2s" }}
           onMouseEnter={e=>{e.currentTarget.style.background="#fff5f5";}}
           onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
           Create Account →
         </button>
       </div>
 
-      {/* Main login card */}
       <div style={{ background:"white", borderRadius:24, padding:"44px 48px", width:"100%", maxWidth:420,
         boxShadow:"0 24px 64px rgba(0,0,0,0.12)", border:"1px solid #fecaca", animation:"fadeUp 0.35s ease" }}>
 
-        {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:30 }}>
           <div style={{ width:40, height:40, background:"linear-gradient(135deg,#dc2626,#991b1b)",
             borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center",
@@ -625,7 +588,7 @@ function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
             <span style={{fontSize:16}}>👋</span>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#166534" }}>First time here?</div>
-              <div style={{ fontSize:10, color:"#4ade80" === "#4ade80" ? "#15803d" : "#15803d", marginTop:1 }}>
+              <div style={{ fontSize:10, color:"#15803d", marginTop:1 }}>
                 Use the <strong>"Create Account →"</strong> button at the top right to set up your profile.
               </div>
             </div>
@@ -637,13 +600,12 @@ function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
 }
 
 // ─── ONBOARDING WIZARD ────────────────────────────────────────────────────────
-const TOTAL_STEPS = 6; // 1-6 (0 = welcome)
+const TOTAL_STEPS = 6;
 
 function OB_Input({ label, value, onChange, type="text", placeholder="", required=false, hint="" }) {
   const isNumeric = type === "number";
   const handleChange = (e) => {
     if (isNumeric) {
-      // Only allow digits and a single decimal point — no negatives, no 'e'
       const v = e.target.value.replace(/[^0-9.]/g, "").replace(/^(\d*\.?\d*).*$/, "$1");
       onChange(v);
     } else {
@@ -712,7 +674,6 @@ function OB_ProgressBar({ step }) {
 function OnboardingWizard({ onComplete, onBack }) {
   const [step, setStep] = useState(0);
 
-  // Step 1 – Personal
   const [pName, setPName]           = useState("");
   const [pDob, setPDob]             = useState("");
   const [pNat, setPNat]             = useState("Singaporean");
@@ -724,29 +685,25 @@ function OnboardingWizard({ onComplete, onBack }) {
   const [pPasswordC, setPPasswordC] = useState("");
   const [showPw, setShowPw]         = useState(false);
 
-  // Step 2 – Financial
   const [pSalary, setPSalary]       = useState("");
   const [pExpenses, setPExpenses]   = useState("");
   const [pEmployer, setPEmployer]   = useState("");
   const [pHousehold, setPHousehold] = useState("2");
   const [pRisk, setPRisk]           = useState("Moderate");
   const [pGoals, setPGoals]         = useState(["Retirement","Emergency Fund"]);
-  const [pInsurance, setPInsurance] = useState("");  // insurance coverage amount
-  const [pSector, setPSector]       = useState("Balanced"); // portfolio sector focus
+  const [pInsurance, setPInsurance] = useState("");
+  const [pSector, setPSector]       = useState("Balanced");
 
-  // Step 3 – Assets
   const [assetRows, setAssetRows]   = useState(ASSET_SUGGESTIONS.map(s=>({...s, enabled:false, value:""})));
   const [customAssets, setCustomAssets] = useState([]);
   const [addingCustomA, setAddingCustomA] = useState(false);
   const [newCustA, setNewCustA]     = useState({name:"",category:"Cash & Deposits",value:""});
 
-  // Step 4 – Liabilities
   const [liabRows, setLiabRows]     = useState(LIAB_SUGGESTIONS.map(s=>({...s, enabled:false, value:"", monthly:""})));
   const [customLiabs, setCustomLiabs] = useState([]);
   const [addingCustomL, setAddingCustomL] = useState(false);
   const [newCustL, setNewCustL]     = useState({name:"",category:"Mortgage",value:"",monthly:""});
 
-  // Step 5 – Connect
   const [connected, setConnected]   = useState({singpass:false,dbs:false,ibkr:false,coinbase:false,cpf:false});
   const [connecting, setConnecting] = useState(null);
 
@@ -802,7 +759,6 @@ function OnboardingWizard({ onComplete, onBack }) {
   };
 
   const firstName = pName.trim().split(" ")[0] || "there";
-  const finalScores = step >= 6 ? computeWellness(buildFinalAssets(), buildFinalLiabs(), { salary:pSalary, monthlyExpenses:pExpenses }) : null;
 
   const cardStyle = { background:"white", borderRadius:24, padding:"36px 40px",
     width:"100%", maxWidth:580, boxShadow:"0 24px 64px rgba(0,0,0,0.12)",
@@ -829,7 +785,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         input:focus,select:focus{border-color:#dc2626!important;outline:none!important;box-shadow:0 0 0 3px rgba(220,38,38,0.12)!important;}
       `}</style>
 
-      {/* Logo strip */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:32 }}>
         <div style={{ width:38, height:38, background:"linear-gradient(135deg,#dc2626,#991b1b)",
           borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center",
@@ -840,7 +795,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       </div>
 
-      {/* ── STEP 0: WELCOME ── */}
       {step === 0 && (
         <div style={{ ...cardStyle, textAlign:"center", maxWidth:520 }}>
           <div style={{ fontSize:48, marginBottom:18, animation:"pulse 2s infinite" }}>⬡</div>
@@ -882,7 +836,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       )}
 
-      {/* ── STEP 1: PERSONAL DETAILS ── */}
       {step === 1 && (
         <div style={cardStyle}>
           <OB_ProgressBar step={1}/>
@@ -901,7 +854,6 @@ function OnboardingWizard({ onComplete, onBack }) {
               <OB_Input label="Home Address" value={pAddress} onChange={setPAddress} placeholder="123 Tampines Street 21, #08-45"/>
             </div>
           </div>
-          {/* ── Password section ── */}
           <div style={{marginTop:16,padding:"14px 16px",background:"#fff5f5",borderRadius:12,border:"1px solid #fecaca"}}>
             <div style={{fontSize:11,fontWeight:800,color:"#dc2626",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
               🔒 Set a Password
@@ -951,7 +903,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       )}
 
-      {/* ── STEP 2: FINANCIAL PROFILE ── */}
       {step === 2 && (
         <div style={cardStyle}>
           <OB_ProgressBar step={2}/>
@@ -975,7 +926,6 @@ function OnboardingWizard({ onComplete, onBack }) {
                   <span>1</span><span>8</span>
                 </div>
               </div>
-              {/* Risk Tolerance — Conservative | Balanced | Aggressive */}
               <div style={{marginBottom:14}}>
                 <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:6}}>Risk Tolerance</label>
                 <div style={{display:"flex",gap:6}}>
@@ -989,7 +939,6 @@ function OnboardingWizard({ onComplete, onBack }) {
                   ))}
                 </div>
               </div>
-              {/* Primary Financial Goal */}
               <div style={{marginBottom:14}}>
                 <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:6}}>Primary Financial Goal</label>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -1003,7 +952,6 @@ function OnboardingWizard({ onComplete, onBack }) {
                   ))}
                 </div>
               </div>
-              {/* Portfolio Sector Focus */}
               <div style={{marginBottom:14}}>
                 <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:6}}>Portfolio Sector Focus</label>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -1030,7 +978,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       )}
 
-      {/* ── STEP 3: ASSETS ── */}
       {step === 3 && (
         <div style={{ ...cardStyle, maxWidth:640 }}>
           <OB_ProgressBar step={3}/>
@@ -1055,10 +1002,7 @@ function OnboardingWizard({ onComplete, onBack }) {
                 {row.enabled && (
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <span style={{ fontSize:11, fontWeight:700, color:"#6b7280", flexShrink:0 }}>S$</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={row.value}
+                    <input type="text" inputMode="decimal" value={row.value}
                       onChange={e=>{
                         const v = e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
                         setAssetRows(rows=>rows.map((r,i)=>i===idx?{...r,value:v}:r));
@@ -1066,8 +1010,7 @@ function OnboardingWizard({ onComplete, onBack }) {
                       onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                       placeholder={row.placeholder}
                       style={{ width:110, padding:"6px 10px", borderRadius:8, border:"1px solid #fecaca",
-                        background:"white", fontSize:12, fontFamily:"'Sora',sans-serif", outline:"none",
-                        color:"#1a0505" }}/>
+                        background:"white", fontSize:12, fontFamily:"'Sora',sans-serif", outline:"none", color:"#1a0505" }}/>
                   </div>
                 )}
               </div>
@@ -1120,7 +1063,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       )}
 
-      {/* ── STEP 4: LIABILITIES ── */}
       {step === 4 && (
         <div style={{ ...cardStyle, maxWidth:640 }}>
           <OB_ProgressBar step={4}/>
@@ -1146,10 +1088,7 @@ function OnboardingWizard({ onComplete, onBack }) {
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <div>
                       <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>Total (S$)</div>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={row.value}
+                      <input type="text" inputMode="decimal" value={row.value}
                         onChange={e=>{
                           const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
                           setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,value:v}:r));
@@ -1160,10 +1099,7 @@ function OnboardingWizard({ onComplete, onBack }) {
                     </div>
                     <div>
                       <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>Monthly (S$)</div>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={row.monthly}
+                      <input type="text" inputMode="decimal" value={row.monthly}
                         onChange={e=>{
                           const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
                           setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,monthly:v}:r));
@@ -1228,12 +1164,11 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       )}
 
-      {/* ── STEP 5: CONNECT ACCOUNTS ── */}
       {step === 5 && (
         <div style={cardStyle}>
           <OB_ProgressBar step={5}/>
           <h2 style={{ fontSize:20, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Connect your accounts</h2>
-          <p style={{ fontSize:12, color:"#9ca3af", marginBottom:6 }}>Securely link accounts for automatic updates. All connections are <strong>read-only</strong> — we can never execute trades or move funds.</p>
+          <p style={{ fontSize:12, color:"#9ca3af", marginBottom:6 }}>Securely link accounts for automatic updates. All connections are <strong>read-only</strong>.</p>
           <div style={{ display:"flex", gap:8, marginBottom:18 }}>
             {["🔒 256-bit encrypted","👁️ Read-only access","🚫 No trading","🗑️ Delete anytime"].map((t,i)=>(
               <div key={i} style={{ padding:"4px 8px", borderRadius:8, background:"#fff5f5",
@@ -1255,8 +1190,7 @@ function OnboardingWizard({ onComplete, onBack }) {
                   <span style={{ padding:"4px 12px", borderRadius:99, background:"#dcfce7",
                     color:"#16a34a", fontSize:11, fontWeight:700 }}>✓ Connected</span>
                 ) : (
-                  <button onClick={()=>simulateConnect(p.id)}
-                    disabled={connecting===p.id}
+                  <button onClick={()=>simulateConnect(p.id)} disabled={connecting===p.id}
                     style={{ padding:"7px 16px", borderRadius:9, border:`1px solid ${p.color}`,
                       background:"transparent", color:p.color, fontSize:11, fontWeight:700,
                       cursor:connecting===p.id?"not-allowed":"pointer", fontFamily:"'Sora',sans-serif",
@@ -1275,7 +1209,6 @@ function OnboardingWizard({ onComplete, onBack }) {
         </div>
       )}
 
-      {/* ── STEP 6: DONE ── */}
       {step === 6 && (() => {
         const fa = buildFinalAssets(), fl = buildFinalLiabs();
         const scores = computeWellness(fa, fl, { salary:pSalary, monthlyExpenses:pExpenses });
@@ -1303,7 +1236,7 @@ function OnboardingWizard({ onComplete, onBack }) {
             {scores.liquidity < 60 && (
               <div style={{ padding:"10px 14px", borderRadius:10, background:"#fff1f0",
                 border:"1px solid #fca5a5", marginBottom:16, fontSize:11, color:"#b91c1c", textAlign:"left" }}>
-                ⚠️ <strong>Priority action:</strong> Your emergency fund covers only {scores.liqMonths} months of expenses. The app will guide you to fix this first.
+                ⚠️ <strong>Priority action:</strong> Your emergency fund covers only {scores.liqMonths} months of expenses.
               </div>
             )}
             <button onClick={handleFinish}
@@ -1319,7 +1252,6 @@ function OnboardingWizard({ onComplete, onBack }) {
   );
 }
 
-// Scenario tag → scenario id mapping for action prioritisation
 const SCENARIO_ACTION_MAP = {
   crash:      "Market Crash",
   jobloss:    "Job Loss",
@@ -1331,13 +1263,12 @@ const SCENARIO_ACTION_MAP = {
 const buildActionsForScenario = (scenarioId, baseActions) => {
   if (!scenarioId) return baseActions;
   const tag = SCENARIO_ACTION_MAP[scenarioId];
-  // Move actions matching this scenario's tag to the front, re-number priority
   const matched   = baseActions.filter(a => a.scenarioTag === tag);
   const unmatched = baseActions.filter(a => a.scenarioTag !== tag);
   return [...matched, ...unmatched].map((a, i) => ({ ...a, priority: i + 1 }));
 };
 
-// ─── ADD ASSET PANEL (standalone — uncontrolled refs, no per-keystroke re-render) ───
+// ─── ADD ASSET PANEL ──────────────────────────────────────────────────────────
 function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub }) {
   const nameRef  = React.useRef();
   const instRef  = React.useRef();
@@ -1346,7 +1277,6 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
   const [error,  setError]  = React.useState("");
   const [preview,setPreview]= React.useState(null);
 
-  // Live preview — only updates when value/category select changes
   const refreshPreview = () => {
     const v = parseFloat(valRef.current?.value);
     setPreview(isNaN(v)||v<=0 ? null : v);
@@ -1357,11 +1287,7 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
     const val  = parseFloat(valRef.current?.value);
     if (!name)        { setError("Please enter an asset name."); nameRef.current?.focus(); return; }
     if (!val || val<=0){ setError("Please enter a value greater than 0."); valRef.current?.focus(); return; }
-    onAdd({
-      name, category: cat,
-      value: val / cur.rate,
-      institution: instRef.current?.value?.trim() || "Manual Entry",
-    });
+    onAdd({ name, category: cat, value: val / cur.rate, institution: instRef.current?.value?.trim() || "Manual Entry" });
   };
 
   const catColor = ASSET_COLORS[cat] || "#94a3b8";
@@ -1370,13 +1296,9 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:card,borderRadius:22,width:480,border:`1px solid ${bdr}`,animation:"fadeUp 0.28s ease",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflow:"hidden",fontFamily:"'Sora',sans-serif"}}>
-
-        {/* Header strip */}
         <div style={{background:`linear-gradient(135deg,${catColor}22,${catColor}08)`,padding:"20px 24px 16px",borderBottom:`1px solid ${catColor}33`}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:44,height:44,borderRadius:12,background:`${catColor}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:`2px solid ${catColor}44`}}>
-              {catIcon}
-            </div>
+            <div style={{width:44,height:44,borderRadius:12,background:`${catColor}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:`2px solid ${catColor}44`}}>{catIcon}</div>
             <div>
               <div style={{fontSize:16,fontWeight:800,color:txt}}>Add New Asset</div>
               <div style={{fontSize:10,color:sub,marginTop:1}}>Value in {cur.code} · {cur.flag}</div>
@@ -1384,9 +1306,7 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
             <button onClick={onClose} style={{marginLeft:"auto",background:"none",border:"none",fontSize:20,cursor:"pointer",color:sub,lineHeight:1}}>×</button>
           </div>
         </div>
-
         <div style={{padding:"20px 24px 24px"}}>
-          {/* Category picker — visual chips */}
           <div style={{marginBottom:16}}>
             <div style={{fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Category</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -1403,15 +1323,12 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
               ))}
             </div>
           </div>
-
-          {/* Fields — native inputs with refs, zero re-render on typing */}
           <div style={{marginBottom:12}}>
             <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Asset Name *</label>
-            <input ref={nameRef} defaultValue="" placeholder="e.g. S&P 500 ETF, DBS Savings, Gold Bar..."
+            <input ref={nameRef} defaultValue="" placeholder="e.g. S&P 500 ETF, DBS Savings..."
               onChange={()=>setError("")}
               style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
           </div>
-
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
             <div>
               <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Value ({cur.code}) *</label>
@@ -1425,12 +1342,10 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
             </div>
             <div>
               <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Institution</label>
-              <input ref={instRef} defaultValue="" placeholder="e.g. DBS, IBKR, Manual..."
+              <input ref={instRef} defaultValue="" placeholder="e.g. DBS, IBKR..."
                 style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
             </div>
           </div>
-
-          {/* Live preview pill */}
           {preview&&(
             <div style={{background:`${catColor}12`,border:`1px solid ${catColor}33`,borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:16}}>{catIcon}</span>
@@ -1441,13 +1356,11 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
               <div style={{fontSize:10,color:sub}}>{cat}</div>
             </div>
           )}
-
           {error&&<div style={{fontSize:10,color:"#ef4444",fontWeight:600,marginBottom:10,padding:"8px 12px",background:"#fff1f0",borderRadius:8,border:"1px solid #fca5a5"}}>{error}</div>}
-
           <div style={{display:"flex",gap:10}}>
-            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",border:`1.5px solid ${bdr}`,borderRadius:10,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",transition:"all 0.15s"}}>Cancel</button>
+            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",border:`1.5px solid ${bdr}`,borderRadius:10,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
             <button onClick={handleSubmit}
-              style={{flex:2,padding:"11px",background:`linear-gradient(135deg,${accentPrimary},#10b981)`,color:"white",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif",boxShadow:`0 4px 14px ${accentPrimary}44`,transition:"all 0.15s"}}>
+              style={{flex:2,padding:"11px",background:`linear-gradient(135deg,${accentPrimary},#10b981)`,color:"white",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif",boxShadow:`0 4px 14px ${accentPrimary}44`}}>
               ＋ Add Asset
             </button>
           </div>
@@ -1457,7 +1370,7 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
   );
 }
 
-// ─── ADD LIABILITY PANEL (standalone — uncontrolled refs) ────────────────────
+// ─── ADD LIABILITY PANEL ──────────────────────────────────────────────────────
 function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
   const nameRef    = React.useRef();
   const instRef    = React.useRef();
@@ -1467,10 +1380,10 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
   const [error,    setError]  = React.useState("");
   const [preview,  setPreview]= React.useState(null);
 
-  const LIAB_ICONS = {"Mortgage":"🏠","Personal Loan":"🏦","Credit Card":"💳","Car Loan":"🚗","Business Loan":"🏢","Student Loan":"📚","Other":"📋"};
-  const LIAB_COLORS= {"Mortgage":"#ef4444","Personal Loan":"#f43f5e","Credit Card":"#f97316","Car Loan":"#fb923c","Business Loan":"#dc2626","Student Loan":"#fbbf24","Other":"#94a3b8"};
-  const catColor   = LIAB_COLORS[cat] || "#ef4444";
-  const catIcon    = LIAB_ICONS[cat]  || "📋";
+  const LIAB_ICONS  = {"Mortgage":"🏠","Personal Loan":"🏦","Credit Card":"💳","Car Loan":"🚗","Business Loan":"🏢","Student Loan":"📚","Other":"📋"};
+  const LIAB_COLORS = {"Mortgage":"#ef4444","Personal Loan":"#f43f5e","Credit Card":"#f97316","Car Loan":"#fb923c","Business Loan":"#dc2626","Student Loan":"#fbbf24","Other":"#94a3b8"};
+  const catColor    = LIAB_COLORS[cat] || "#ef4444";
+  const catIcon     = LIAB_ICONS[cat]  || "📋";
 
   const refreshPreview = () => {
     const v = parseFloat(totalRef.current?.value);
@@ -1480,26 +1393,17 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
   const handleSubmit = () => {
     const name  = nameRef.current?.value?.trim();
     const total = parseFloat(totalRef.current?.value);
-    if (!name)          { setError("Please enter a liability name."); nameRef.current?.focus(); return; }
+    if (!name)           { setError("Please enter a liability name."); nameRef.current?.focus(); return; }
     if (!total||total<=0){ setError("Please enter a total amount greater than 0."); totalRef.current?.focus(); return; }
-    onAdd({
-      name, category: cat,
-      value:   total / cur.rate,
-      monthly: parseFloat(monthlyRef.current?.value)||0,
-      institution: instRef.current?.value?.trim() || "Manual Entry",
-    });
+    onAdd({ name, category: cat, value: total / cur.rate, monthly: parseFloat(monthlyRef.current?.value)||0, institution: instRef.current?.value?.trim() || "Manual Entry" });
   };
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:card,borderRadius:22,width:480,border:`1px solid ${bdr}`,animation:"fadeUp 0.28s ease",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflow:"hidden",fontFamily:"'Sora',sans-serif"}}>
-
-        {/* Header strip */}
         <div style={{background:`linear-gradient(135deg,${catColor}18,${catColor}06)`,padding:"20px 24px 16px",borderBottom:`1px solid ${catColor}33`}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:44,height:44,borderRadius:12,background:`${catColor}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:`2px solid ${catColor}44`}}>
-              {catIcon}
-            </div>
+            <div style={{width:44,height:44,borderRadius:12,background:`${catColor}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:`2px solid ${catColor}44`}}>{catIcon}</div>
             <div>
               <div style={{fontSize:16,fontWeight:800,color:txt}}>Add New Liability</div>
               <div style={{fontSize:10,color:sub,marginTop:1}}>Value in {cur.code} · {cur.flag}</div>
@@ -1507,9 +1411,7 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
             <button onClick={onClose} style={{marginLeft:"auto",background:"none",border:"none",fontSize:20,cursor:"pointer",color:sub,lineHeight:1}}>×</button>
           </div>
         </div>
-
         <div style={{padding:"20px 24px 24px"}}>
-          {/* Category picker */}
           <div style={{marginBottom:16}}>
             <div style={{fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Liability Type</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -1526,15 +1428,12 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
               ))}
             </div>
           </div>
-
-          {/* Name */}
           <div style={{marginBottom:12}}>
             <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Liability Name *</label>
             <input ref={nameRef} defaultValue="" placeholder="e.g. HDB Mortgage, OCBC Car Loan..."
               onChange={()=>setError("")}
               style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
           </div>
-
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
             <div>
               <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Total ({cur.code}) *</label>
@@ -1562,8 +1461,6 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
                 style={{width:"100%",padding:"10px 10px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
             </div>
           </div>
-
-          {/* Live preview */}
           {preview&&(
             <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:16}}>{catIcon}</span>
@@ -1573,9 +1470,7 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
               </div>
             </div>
           )}
-
           {error&&<div style={{fontSize:10,color:"#ef4444",fontWeight:600,marginBottom:10,padding:"8px 12px",background:"#fff1f0",borderRadius:8,border:"1px solid #fca5a5"}}>{error}</div>}
-
           <div style={{display:"flex",gap:10}}>
             <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",border:`1.5px solid ${bdr}`,borderRadius:10,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
             <button onClick={handleSubmit}
@@ -1601,13 +1496,11 @@ const NAV = [
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  // ── Onboarding gate ──
   const [onboarded, setOnboarded] = useState(false);
   const [loggedIn,  setLoggedIn]  = useState(false);
-  const [showLogin, setShowLogin] = useState(true); // true=show login screen, false=show onboarding wizard
+  const [showLogin, setShowLogin] = useState(true);
   const [loading,   setLoading]   = useState(true);
 
-  // ── Core state ──
   const [profile,  setProfile]  = useState(null);
   const [assets,   setAssets]   = useState([]);
   const [liabs,    setLiabs]    = useState([]);
@@ -1624,7 +1517,6 @@ export default function App() {
     debtpay:  { loanCut:10000, creditCut:5000 },
   });
 
-  // ── UI state ──
   const [screen,   setScreen]   = useState("home");
   const [pro,      setPro]      = useState(false);
   const [cur,      setCur]      = useState(CURRENCIES[0]);
@@ -1637,8 +1529,6 @@ export default function App() {
   const [editLiabs,     setEditLiabs]     = useState(false);
   const [addAssetOpen,  setAddAssetOpen]  = useState(false);
   const [addLiabOpen,   setAddLiabOpen]   = useState(false);
-  const [newA, setNewA] = useState({name:"",category:"Cash & Deposits",value:"",institution:""});
-  const [newL, setNewL] = useState({name:"",category:"Mortgage",value:"",monthly:"",institution:""});
   const [cardIdx,  setCardIdx]  = useState(0);
   const [histTab,  setHistTab]  = useState(false);
   const [scenario, setScenario] = useState(null);
@@ -1650,22 +1540,19 @@ export default function App() {
   const [resetPwInput,    setResetPwInput]    = useState("");
   const [resetPwError,    setResetPwError]    = useState("");
 
-  // ── Load from localStorage on mount ──
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const d = JSON.parse(saved);
         if (d.profile && d.profile.name) {
-          // Account exists — show login screen (don't auto-login)
-          setOnboarded(true); // account data exists
+          setOnboarded(true);
         }
       }
-    } catch(e) { /* silent fail */ }
+    } catch(e) {}
     setLoading(false);
   }, []);
 
-  // ── Persist to localStorage on every change ──
   useEffect(() => {
     if (!onboarded || !profile) return;
     try {
@@ -1675,7 +1562,6 @@ export default function App() {
     } catch(e) {}
   }, [profile, assets, liabs, connected, expenses, spendLimit, done, params, onboarded]);
 
-  // ── Onboarding complete callback ──
   const handleOnboardingComplete = useCallback((data) => {
     setProfile(data.profile);
     setAssets(data.assets   || []);
@@ -1686,7 +1572,6 @@ export default function App() {
     setEditP(data.profile);
   }, []);
 
-  // ── Login callback ──
   const handleLogin = useCallback((data) => {
     setProfile(data.profile);
     setAssets(data.assets   || []);
@@ -1707,10 +1592,8 @@ export default function App() {
     setEditP(data.profile);
   }, []);
 
-  // ── Keep editP in sync with profile ──
   useEffect(() => { if (profile) setEditP({...profile}); }, [profile]);
 
-  // ── Computed values ──
   const totalA   = assets.reduce((s,a)=>s+a.value,0);
   const totalL   = liabs.reduce((s,l)=>s+l.value,0);
   const netWorth = totalA - totalL;
@@ -1729,21 +1612,21 @@ export default function App() {
   const todayExp = expenses.filter(e=>e.date==="today").reduce((s,e)=>s+e.amount,0);
 
   // ── Theme ──
-  // ── Theme (static — pro toggle only affects the Insights tab) ──
   const bg           = "#f1f5f9";
   const card         = "#ffffff";
   const bdr          = "#e2e8f0";
   const txt          = "#0f172a";
   const sub          = "#64748b";
   const sidebarBg    = "#1e3a8a";
-  const topBand      = "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 60%,#60a5fa 100%)";
+  // ── FIX 1: smooth 5-stop gradient, taller band (340px) ──
+  const topBandBg    = "linear-gradient(180deg,#1d4ed8 0%,#3b82f6 38%,#93c5fd 68%,#dbeafe 84%,#f1f5f9 100%)";
   const accentPrimary = "#1d4ed8";
 
-  // ── Scenario & Decision Simulator (Logic.docx §9, §10) ──
+  // ── Scenario Engine ──
   const calcImpact = () => {
     if (!scenario || !profile || !scores) return null;
     const salary   = parseFloat(profile.salary)          || 6000;
-    const expenses = parseFloat(profile.monthlyExpenses) || salary * 0.5;
+    const expAmt   = parseFloat(profile.monthlyExpenses) || salary * 0.5;
     const p = params;
 
     const rescore = (aFn, lFn) => {
@@ -1774,7 +1657,7 @@ export default function App() {
         message:"Market-linked assets amplify downside risk." };
     }
     if (scenario === "jobloss") {
-      const cashDrop = p.jobloss.months * expenses;
+      const cashDrop = p.jobloss.months * expAmt;
       const ns = rescore(a=>a.category==="Cash & Deposits"?{...a,value:Math.max(0,a.value-cashDrop)}:a);
       return { nw:-Math.round(cashDrop), newScore:ns.overall, sc:ns.overall-scores.overall,
         survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
@@ -1833,19 +1716,15 @@ export default function App() {
   const impact = calcImpact();
   const sd     = SCENARIOS_DEF.find(s=>s.id===scenario);
 
-  // ── Asset / Liability CRUD ──
+  // ── CRUD ──
   const addAsset = ({ name, category, value, institution }) => {
-    setAssets(a=>[...a,{id:Date.now(), name, category,
-      value, color:ASSET_COLORS[category]||"#94a3b8",
-      icon:ASSET_ICONS[category]||"💼", institution, change:0}]);
-    setAddAssetOpen(false);
+    setAssets(a=>[...a,{id:Date.now(), name, category, value,
+      color:ASSET_COLORS[category]||"#94a3b8", icon:ASSET_ICONS[category]||"💼",
+      institution, change:0}]);
     setAddAssetOpen(false);
   };
   const addLiab = ({ name, category, value, monthly, institution }) => {
-    setLiabs(l=>[...l,{id:Date.now(), name, category,
-      value, color:"#ef4444",
-      monthly, institution}]);
-    setAddLiabOpen(false);
+    setLiabs(l=>[...l,{id:Date.now(), name, category, value, color:"#ef4444", monthly, institution}]);
     setAddLiabOpen(false);
   };
   const markDone = id => {
@@ -1856,21 +1735,13 @@ export default function App() {
     const amt = parseFloat(newExpense.amount);
     if (!newExpense.name || !newExpense.amount || isNaN(amt) || amt <= 0) return;
     setExpenses(ex=>[{id:Date.now(),name:newExpense.name,category:newExpense.category,
-      amount:amt,
-      time:new Date().toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"}),date:"today"},...ex]);
+      amount:amt, time:new Date().toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"}),date:"today"},...ex]);
     setNewExpense({name:"",category:"Food & Drink",amount:""});
     setAddExpOpen(false);
-  };
-  const resetApp = () => {
-    if (window.confirm("Reset all data and return to onboarding? This cannot be undone.")) {
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.reload();
-    }
   };
 
   const expCatColors = {"Food & Drink":"#f59e0b","Transport":"#06b6d4","Groceries":"#10b981","Entertainment":"#8b5cf6","Shopping":"#ec4899","Health":"#ef4444","Utilities":"#94a3b8","Education":"#6366f1","Other":"#475569"};
 
-  // ── Modal helper ──
   const Modal = ({title,subtitle,onClose,children}) => (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:card,borderRadius:20,padding:26,width:430,border:`1px solid ${bdr}`,animation:"fadeUp 0.28s ease",maxHeight:"88vh",overflowY:"auto"}}>
@@ -1881,21 +1752,14 @@ export default function App() {
     </div>
   );
 
-  // ── Loading / Onboarding gate ──
   if (loading) return (
     <div style={{minHeight:"100vh",background:"#fff5f5",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{fontSize:32,animation:"pulse 1.2s infinite"}}>⬡</div>
     </div>
   );
-  // New user clicked "Create Account" — show questionnaire
   if (!loggedIn && !showLogin) return <OnboardingWizard onComplete={handleOnboardingComplete} onBack={()=>setShowLogin(true)}/>;
-  // Always show login screen first for everyone (new and returning users)
   if (!loggedIn) return (
-    <LoginScreen
-      hasAccount={onboarded}
-      onLogin={handleLogin}
-      onCreateAccount={()=>setShowLogin(false)}
-    />
+    <LoginScreen hasAccount={onboarded} onLogin={handleLogin} onCreateAccount={()=>setShowLogin(false)}/>
   );
   if (!profile)   return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
 
@@ -1920,10 +1784,11 @@ export default function App() {
         input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;}
       `}</style>
 
-      <div style={{position:"fixed",top:0,left:220,right:0,height:195,background:topBand,zIndex:0,pointerEvents:"none",transition:"background 0.4s"}}/>
+      {/* ── FIX 1: smooth gradient band, 340px tall ── */}
+      <div style={{position:"fixed",top:0,left:220,right:0,height:340,background:topBandBg,zIndex:0,pointerEvents:"none"}}/>
 
       {/* ── SIDEBAR ── */}
-      <div style={{position:"fixed",left:0,top:0,bottom:0,width:220,background:sidebarBg,display:"flex",flexDirection:"column",zIndex:100,transition:"background 0.4s"}}>
+      <div style={{position:"fixed",left:0,top:0,bottom:0,width:220,background:sidebarBg,display:"flex",flexDirection:"column",zIndex:100}}>
         <div style={{padding:"18px 14px 12px"}}>
           <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:15}}>
             <div style={{width:32,height:32,background:"rgba(255,255,255,0.16)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>⬡</div>
@@ -1932,7 +1797,6 @@ export default function App() {
               <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>Financial Hub · SG</div>
             </div>
           </div>
-
         </div>
         <nav style={{flex:1,padding:"0 9px",display:"flex",flexDirection:"column",gap:1}}>
           {NAV.map(n=>(
@@ -1944,7 +1808,6 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Currency */}
         <div style={{padding:"0 9px 7px",position:"relative"}}>
           <button onClick={()=>setShowCurPicker(s=>!s)} style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"7px 11px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:8,color:"white",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
             <span>{cur.flag}</span><strong>{cur.code}</strong><span style={{marginLeft:"auto",opacity:.5,fontSize:10}}>⇅</span>
@@ -1962,11 +1825,9 @@ export default function App() {
           )}
         </div>
 
-        {/* Profile + Reset area */}
         <div style={{padding:"0 9px 16px"}}>
-          {/* Profile row */}
           <div style={{display:"flex",gap:6,marginBottom:6}}>
-            <button onClick={()=>setProfileOpen(true)} style={{flex:1,display:"flex",alignItems:"center",gap:9,padding:"9px 11px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,cursor:"pointer",fontFamily:"'Sora',sans-serif",transition:"background 0.2s"}}>
+            <button onClick={()=>setProfileOpen(true)} style={{flex:1,display:"flex",alignItems:"center",gap:9,padding:"9px 11px",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:accentPrimary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"white",flexShrink:0}}>
                 {(profile.name||"U").charAt(0).toUpperCase()}
               </div>
@@ -1977,25 +1838,11 @@ export default function App() {
               <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>⚙</span>
             </button>
           </div>
-
-          {/* Logout button */}
           <button
-            onClick={()=>{
-              // Only clear session — keep onboarded=true so login screen knows account exists
-              setLoggedIn(false);
-              setShowLogin(true);
-              setProfile(null);
-              setAssets([]);
-              setLiabs([]);
-              setConnected({});
-              setExpenses(INIT_EXPENSES);
-              setDone([]);
-              setScreen("home");
-            }}
-            style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.2s"}}
+            onClick={()=>{setLoggedIn(false);setShowLogin(true);setProfile(null);setAssets([]);setLiabs([]);setConnected({});setExpenses(INIT_EXPENSES);setDone([]);setScreen("home");}}
+            style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
             onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.15)";e.currentTarget.style.color="white";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}
-          >
+            onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}>
             <span style={{fontSize:12}}>⎋</span> Log Out
           </button>
         </div>
@@ -2047,10 +1894,9 @@ export default function App() {
                   <EDonut assets={assets} liabilities={liabs} cur={cur}/>
                 </div>
               </div>
-              {/* Resilience + Survival Runway + Confidence row */}
               {scores&&(
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:11}}>
-                  <div className="hov" style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,borderLeft:`4px solid #14b8a6`,transition:"all .3s"}}>
+                  <div className="hov" style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,borderLeft:"4px solid #14b8a6",transition:"all .3s"}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                       <div style={{fontSize:11,fontWeight:800,color:txt}}>Resilience Score</div>
                       <strong style={{fontSize:17,color:"#14b8a6"}}>{scores.resilience}</strong>
@@ -2119,7 +1965,7 @@ export default function App() {
               <div className="hov" style={{background:card,borderRadius:15,padding:18,border:`1px solid ${bdr}`,marginBottom:10,transition:"all .3s"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <div style={{fontSize:13,fontWeight:800,color:txt}}>Assets <span style={{fontSize:10,color:sub,fontWeight:500}}>({assets.length} positions)</span></div>
-                  <button onClick={()=>setEditAssets(e=>!e)} style={{padding:"5px 13px",background:editAssets?"#ef4444":"#f1f5f9",border:`1px solid ${editAssets?"#ef4444":bdr}`,borderRadius:8,color:editAssets?"white":sub,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",transition:"all 0.2s"}}>
+                  <button onClick={()=>setEditAssets(e=>!e)} style={{padding:"5px 13px",background:editAssets?"#ef4444":"#f1f5f9",border:`1px solid ${editAssets?"#ef4444":bdr}`,borderRadius:8,color:editAssets?"white":sub,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
                     {editAssets?"✓ Done":"✏ Edit"}
                   </button>
                 </div>
@@ -2130,7 +1976,7 @@ export default function App() {
                 ) : (
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {assets.map(a=>(
-                      <div key={a.id} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",background:editAssets?"#fff5f5":"#f8fafc",borderRadius:10,border:`1px solid ${editAssets?"#fca5a5":bdr}`,transition:"all .2s"}}>
+                      <div key={a.id} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",background:editAssets?"#fff5f5":"#f8fafc",borderRadius:10,border:`1px solid ${editAssets?"#fca5a5":bdr}`}}>
                         <div style={{width:36,height:36,borderRadius:9,background:`${a.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{a.icon}</div>
                         <div style={{flex:1}}>
                           <div style={{fontSize:11,fontWeight:800,color:txt}}>{a.name}</div>
@@ -2153,7 +1999,7 @@ export default function App() {
               <div className="hov" style={{background:card,borderRadius:15,padding:18,border:`1px solid ${bdr}`,transition:"all .3s"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <div style={{fontSize:13,fontWeight:800,color:txt}}>Liabilities <span style={{fontSize:10,color:sub,fontWeight:500}}>({liabs.length} items)</span></div>
-                  <button onClick={()=>setEditLiabs(e=>!e)} style={{padding:"5px 13px",background:editLiabs?"#ef4444":"#f1f5f9",border:`1px solid ${editLiabs?"#ef4444":bdr}`,borderRadius:8,color:editLiabs?"white":sub,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",transition:"all 0.2s"}}>
+                  <button onClick={()=>setEditLiabs(e=>!e)} style={{padding:"5px 13px",background:editLiabs?"#ef4444":"#f1f5f9",border:`1px solid ${editLiabs?"#ef4444":bdr}`,borderRadius:8,color:editLiabs?"white":sub,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
                     {editLiabs?"✓ Done":"✏ Edit"}
                   </button>
                 </div>
@@ -2164,7 +2010,7 @@ export default function App() {
                 ) : (
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {liabs.map(l=>(
-                      <div key={l.id} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",background:editLiabs?"#fff5f5":"#fff5f5",borderRadius:10,border:`1px solid ${editLiabs?"#fca5a5":"#fecaca"}`,transition:"all .2s"}}>
+                      <div key={l.id} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",background:"#fff5f5",borderRadius:10,border:`1px solid ${editLiabs?"#fca5a5":"#fecaca"}`}}>
                         <div style={{width:36,height:36,borderRadius:9,background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>💳</div>
                         <div style={{flex:1}}>
                           <div style={{fontSize:11,fontWeight:800,color:txt}}>{l.name}</div>
@@ -2188,7 +2034,6 @@ export default function App() {
                   <Lbl style={{color:"rgba(255,255,255,0.65)"}}>Why Your Score Is {wellness}</Lbl>
                   <h1 style={{fontSize:23,fontWeight:800,color:"white"}}>Insights</h1>
                 </div>
-                {/* Investor / Pro toggle — top-right of Insights only */}
                 <div style={{display:"flex",background:"rgba(0,0,0,0.22)",borderRadius:9,padding:3,gap:2}}>
                   {["Investor","Pro"].map(m=>(
                     <button key={m} onClick={()=>setPro(m==="Pro")}
@@ -2216,10 +2061,9 @@ export default function App() {
               </div>
               {pro&&(
                 <>
-                  {/* Fragility + Confidence + Survival Runway diagnostic row */}
                   {scores&&(
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:11}}>
-                      <div style={{background:card,borderRadius:14,padding:18,border:`2px solid #14b8a6`,borderLeft:`6px solid #14b8a6`}}>
+                      <div style={{background:card,borderRadius:14,padding:18,border:"2px solid #14b8a6",borderLeft:"6px solid #14b8a6"}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                           <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
                           <div style={{fontSize:11,fontWeight:800,color:txt}}>Fragility Analysis</div>
@@ -2239,9 +2083,9 @@ export default function App() {
                           </div>
                         </div>
                         <div style={{fontSize:9,color:sub,lineHeight:1.6}}>
-                          {scores.fragility==="Low"?"Portfolio can absorb financial shocks well. Maintain current balance.":
-                           scores.fragility==="Moderate"?"Some vulnerability to income disruption or market events. Strengthen liquidity.":
-                           "High vulnerability detected. Prioritise emergency fund and debt reduction immediately."}
+                          {scores.fragility==="Low"?"Portfolio can absorb financial shocks well.":
+                           scores.fragility==="Moderate"?"Some vulnerability to income disruption. Strengthen liquidity.":
+                           "High vulnerability detected. Prioritise emergency fund and debt reduction."}
                         </div>
                       </div>
                       <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}`,borderLeft:`6px solid ${scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}`}}>
@@ -2263,7 +2107,7 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-                        <div style={{fontSize:9,color:sub,lineHeight:1.6}}>Based on profile completeness. Add insurance coverage, debts and goals to improve accuracy.</div>
+                        <div style={{fontSize:9,color:sub,lineHeight:1.6}}>Add insurance coverage, debts and goals to improve accuracy.</div>
                       </div>
                       <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}`,borderLeft:`6px solid ${scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}`}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
@@ -2288,7 +2132,6 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  {/* Bloomberg Pro analytics panel */}
                   <div style={{background:"linear-gradient(135deg,#1a0505,#2d0808)",borderRadius:15,padding:20,border:"1px solid #7f1d1d",marginBottom:11}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
                       <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
@@ -2315,20 +2158,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Balance Sheet Generator */}
                   {(()=>{
                     const bsDate = new Date().toLocaleDateString("en-SG",{day:"2-digit",month:"long",year:"numeric"});
-                    const assetsByCategory = Object.entries(
-                      assets.reduce((acc,a)=>({...acc,[a.category]:(acc[a.category]||0)+a.value}),{})
-                    ).sort((a,b)=>b[1]-a[1]);
-                    const liabsByCategory = Object.entries(
-                      liabs.reduce((acc,l)=>({...acc,[l.category]:(acc[l.category]||0)+l.value}),{})
-                    ).sort((a,b)=>b[1]-a[1]);
-                    const savingsRate = Math.max(0,Math.round((1-(profile.monthlyExpenses||0)/(profile.salary||1))*100));
+                    const assetsByCategory = Object.entries(assets.reduce((acc,a)=>({...acc,[a.category]:(acc[a.category]||0)+a.value}),{})).sort((a,b)=>b[1]-a[1]);
+                    const liabsByCategory  = Object.entries(liabs.reduce((acc,l)=>({...acc,[l.category]:(acc[l.category]||0)+l.value}),{})).sort((a,b)=>b[1]-a[1]);
+                    const savingsRate    = Math.max(0,Math.round((1-(profile.monthlyExpenses||0)/(profile.salary||1))*100));
                     const monthlySavings = Math.max(0,(profile.salary||0)-(profile.monthlyExpenses||0));
                     return (
                       <div style={{background:"white",borderRadius:15,padding:24,border:"2px solid #dc2626",marginBottom:11,fontFamily:"'Sora',sans-serif"}}>
-                        {/* Header */}
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:14,borderBottom:"2px solid #1d4ed8"}}>
                           <div>
                             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
@@ -2344,10 +2181,7 @@ export default function App() {
                             <div style={{fontSize:9,color:"#64748b"}}>Wellness Score: <strong style={{color:"#dc2626"}}>{wellness}/100</strong></div>
                           </div>
                         </div>
-
-                        {/* Two-column balance sheet */}
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
-                          {/* ASSETS */}
                           <div>
                             <div style={{fontSize:11,fontWeight:800,color:"#10b981",textTransform:"uppercase",letterSpacing:1,marginBottom:10,paddingBottom:6,borderBottom:"1px solid #e2e8f0"}}>Assets</div>
                             {assetsByCategory.length===0
@@ -2367,8 +2201,6 @@ export default function App() {
                               <span style={{fontSize:12,fontWeight:800,color:"#10b981",fontFamily:"'Courier New',monospace"}}>{fc(totalA,cur)}</span>
                             </div>
                           </div>
-
-                          {/* LIABILITIES + EQUITY */}
                           <div>
                             <div style={{fontSize:11,fontWeight:800,color:"#ef4444",textTransform:"uppercase",letterSpacing:1,marginBottom:10,paddingBottom:6,borderBottom:"1px solid #e2e8f0"}}>Liabilities</div>
                             {liabsByCategory.length===0
@@ -2387,14 +2219,12 @@ export default function App() {
                               <span style={{fontSize:11,fontWeight:800,color:"#ef4444"}}>TOTAL LIABILITIES</span>
                               <span style={{fontSize:12,fontWeight:800,color:"#ef4444",fontFamily:"'Courier New',monospace"}}>({fc(totalL,cur)})</span>
                             </div>
-                            <div style={{display:"flex",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"2px solid #1d4ed8",background:"#fff5f5",borderRadius:6,padding:"8px 10px",marginTop:10}}>
+                            <div style={{display:"flex",justifyContent:"space-between",background:"#fff5f5",borderRadius:6,padding:"8px 10px",marginTop:10}}>
                               <span style={{fontSize:11,fontWeight:800,color:"#dc2626"}}>NET WORTH (EQUITY)</span>
                               <span style={{fontSize:12,fontWeight:800,color:netWorth>=0?"#10b981":"#ef4444",fontFamily:"'Courier New',monospace"}}>{fc(netWorth,cur)}</span>
                             </div>
                           </div>
                         </div>
-
-                        {/* Income & cash flow summary */}
                         <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid #e2e8f0"}}>
                           <div style={{fontSize:11,fontWeight:800,color:"#0f172a",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Monthly Cash Flow Summary</div>
                           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
@@ -2411,8 +2241,6 @@ export default function App() {
                             ))}
                           </div>
                         </div>
-
-                        {/* Footer note */}
                         <div style={{marginTop:14,paddingTop:10,borderTop:"1px solid #e2e8f0",fontSize:9,color:"#94a3b8",display:"flex",justifyContent:"space-between"}}>
                           <span>Generated by Finora Pro · {bsDate}</span>
                           <span>All figures are self-reported estimates · Not a substitute for professional financial advice</span>
@@ -2472,9 +2300,13 @@ export default function App() {
                 )}
               </div>
 
-              {/* ── Scenario selector grid ── */}
+              {/* ── FIX 2: section labels — full white + text shadow ── */}
               <div style={{marginBottom:8}}>
-                <div style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:1,marginBottom:7}}>⚡ Scenario Engine — Financial Shocks</div>
+                <div style={{
+                  fontSize:11, fontWeight:800, color:"white",
+                  textTransform:"uppercase", letterSpacing:1, marginBottom:7,
+                  textShadow:"0 1px 6px rgba(0,0,0,0.30)"
+                }}>⚡ Scenario Engine — Financial Shocks</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,marginBottom:14}}>
                   {SCENARIOS_DEF.filter(s=>s.type==="shock").map(s=>(
                     <button key={s.id} onClick={()=>{
@@ -2493,8 +2325,13 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
               <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:1,marginBottom:7}}>✅ Decision Simulator — Positive Actions</div>
+                <div style={{
+                  fontSize:11, fontWeight:800, color:"white",
+                  textTransform:"uppercase", letterSpacing:1, marginBottom:7,
+                  textShadow:"0 1px 6px rgba(0,0,0,0.30)"
+                }}>✅ Decision Simulator — Positive Actions</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9}}>
                   {SCENARIOS_DEF.filter(s=>s.type==="decision").map(s=>(
                     <button key={s.id} onClick={()=>{
@@ -2514,17 +2351,13 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ── Results + Sliders ── */}
               {scenario&&sd&&impact&&(
                 <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:11,animation:"fadeUp 0.3s ease",marginBottom:11}}>
-
-                  {/* Slider panel */}
                   <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${sd.color}44`}}>
                     <div style={{fontSize:11,fontWeight:800,color:txt,marginBottom:14,display:"flex",alignItems:"center",gap:7}}>
                       <span>{sd.icon}</span> Adjust Parameters
                     </div>
 
-                    {/* — CRASH sliders — */}
                     {scenario==="crash"&&[
                       {label:"Equity drop",key:"equityDrop",min:5,max:60,step:5,fmt:v=>`${v}%`},
                       {label:"Crypto drop",key:"cryptoDrop",min:10,max:90,step:10,fmt:v=>`${v}%`},
@@ -2544,7 +2377,6 @@ export default function App() {
                       </div>
                     ))}
 
-                    {/* — JOB LOSS slider — */}
                     {scenario==="jobloss"&&(
                       <div style={{marginBottom:14}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -2564,7 +2396,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* — PROPERTY sliders — */}
                     {scenario==="property"&&[
                       {label:"Cash outlay",    key:"cashOut",     min:5000,  max:50000,  step:5000,  fmt:v=>fc(v,cur,true)},
                       {label:"Mortgage added", key:"mortgageAdd", min:10000, max:300000, step:10000, fmt:v=>fc(v,cur,true)},
@@ -2582,7 +2413,6 @@ export default function App() {
                       </div>
                     ))}
 
-                    {/* — FUND slider — */}
                     {scenario==="fund"&&(
                       <div style={{marginBottom:14}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -2599,7 +2429,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* — DIVERSIFY sliders — */}
                     {scenario==="diversify"&&[
                       {label:"Stocks cut",  key:"stocksCut", min:5,  max:40, step:5,  fmt:v=>`${v}%`},
                       {label:"Gold boost",  key:"goldBoost", min:5,  max:50, step:5,  fmt:v=>`+${v}%`},
@@ -2617,7 +2446,6 @@ export default function App() {
                       </div>
                     ))}
 
-                    {/* — DEBT PAY sliders — */}
                     {scenario==="debtpay"&&[
                       {label:"Loan to repay",   key:"loanCut",   min:1000, max:50000, step:1000, fmt:v=>fc(v,cur,true)},
                       {label:"Credit to clear", key:"creditCut", min:500,  max:20000, step:500,  fmt:v=>fc(v,cur,true)},
@@ -2635,16 +2463,13 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Results cards */}
                   <div style={{display:"flex",flexDirection:"column",gap:11}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11}}>
-                      {/* Net Worth */}
                       <div style={{background:sd.bg,borderRadius:13,padding:16,border:`2px solid ${sd.color}33`,textAlign:"center"}}>
                         <Lbl style={{marginBottom:5}}>Net Worth Impact</Lbl>
                         <div style={{fontSize:21,fontWeight:800,color:impact.nw<0?"#ef4444":"#10b981",marginBottom:3}}>{impact.nw>0?"+":""}{fc(impact.nw,cur)}</div>
                         <div style={{fontSize:9,fontWeight:700,color:sub}}>{fc(netWorth,cur,true)} → {fc(netWorth+impact.nw,cur,true)}</div>
                       </div>
-                      {/* Wellness ring */}
                       <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
                         <Lbl style={{marginBottom:0}}>Wellness Score</Lbl>
                         {(()=>{
@@ -2665,7 +2490,6 @@ export default function App() {
                         <div style={{fontSize:11,fontWeight:800,color:impact.sc<0?"#ef4444":"#10b981"}}>{impact.sc>0?"+":""}{impact.sc} pts</div>
                         <div style={{fontSize:9,color:sub}}>{wellness} → {impact.newScore||Math.max(0,Math.min(100,wellness+impact.sc))}</div>
                       </div>
-                      {/* Survival Runway */}
                       <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
                         <Lbl style={{marginBottom:0}}>Survival Runway</Lbl>
                         <div style={{fontSize:21,fontWeight:800,color:impact.survivalAfter>=6?"#10b981":impact.survivalAfter>=3?"#f59e0b":"#ef4444"}}>{impact.survivalAfter} mo.</div>
@@ -2675,14 +2499,12 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                    {/* Breakdown */}
                     <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"4px 16px"}}>
                       {impact.details.map((d,i)=>(
                         <div key={i} style={{fontSize:10,fontWeight:700,padding:"5px 0",borderBottom:`1px solid ${bdr}`,
                           color:d.includes("−")||d.startsWith("-")?"#ef4444":d.includes("+")?"#10b981":sub}}>{d}</div>
                       ))}
                     </div>
-                    {/* Analysis bar */}
                     <div style={{background:`${sd.color}0c`,borderRadius:12,padding:14,border:`1px solid ${sd.color}33`,display:"flex",gap:11,alignItems:"center"}}>
                       <span style={{fontSize:18,flexShrink:0}}>{sd.type==="decision"?"✅":"💡"}</span>
                       <div style={{flex:1,fontSize:11,color:sub,lineHeight:1.6}}>{impact.message}</div>
@@ -2692,7 +2514,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* No scenario selected — show baseline stats */}
               {!scenario&&scores&&(
                 <div style={{background:card,borderRadius:16,padding:22,border:`1px solid ${bdr}`,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:11}}>
                   {[
@@ -2808,7 +2629,7 @@ export default function App() {
                   <div style={{display:"flex",gap:11,alignItems:"center"}}>
                     <div style={{flex:1}}>
                       <div style={{fontSize:11,fontWeight:700,color:"#1a0505",marginBottom:3}}>Delete Account & All Data</div>
-                      <div style={{fontSize:10,color:"#7f1d1d"}}>Permanently delete your profile, assets, and all settings. This cannot be undone. You will be returned to the main page.</div>
+                      <div style={{fontSize:10,color:"#7f1d1d"}}>Permanently delete your profile, assets, and all settings. This cannot be undone.</div>
                     </div>
                     <button onClick={()=>{setShowResetConfirm(true);setResetPwInput("");setResetPwError("");}} style={{padding:"9px 20px",background:"#dc2626",color:"white",border:"none",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0}}>Delete Account</button>
                   </div>
@@ -2816,19 +2637,14 @@ export default function App() {
                   <div>
                     <div style={{fontSize:11,fontWeight:700,color:"#7f1d1d",marginBottom:6}}>🔒 Confirm account deletion</div>
                     <div style={{fontSize:10,color:"#7f1d1d",marginBottom:12}}>Enter your password to permanently delete your account and all data. This cannot be undone.</div>
-                    <input
-                      type="password"
-                      value={resetPwInput}
+                    <input type="password" value={resetPwInput}
                       onChange={e=>{setResetPwInput(e.target.value);setResetPwError("");}}
                       placeholder="Your password"
-                      style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${resetPwError?"#dc2626":"#fca5a5"}`,background:"white",color:"#111827",fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
-                    />
+                      style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${resetPwError?"#dc2626":"#fca5a5"}`,background:"white",color:"#111827",fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
                     {resetPwError&&<div style={{fontSize:10,color:"#dc2626",fontWeight:600,marginBottom:8}}>{resetPwError}</div>}
                     <div style={{display:"flex",gap:8}}>
-                      <button
-                        onClick={()=>{setShowResetConfirm(false);setResetPwInput("");setResetPwError("");}}
-                        style={{flex:1,padding:"9px",borderRadius:9,border:"1px solid #fca5a5",background:"transparent",color:"#7f1d1d",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                      >Cancel</button>
+                      <button onClick={()=>{setShowResetConfirm(false);setResetPwInput("");setResetPwError("");}}
+                        style={{flex:1,padding:"9px",borderRadius:9,border:"1px solid #fca5a5",background:"transparent",color:"#7f1d1d",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
                       <button
                         onClick={()=>{
                           const stored = profile?.passwordHash;
@@ -2848,8 +2664,7 @@ export default function App() {
                             setScreen("home");
                           } else { setResetPwError("Incorrect password. Try again."); }
                         }}
-                        style={{flex:2,padding:"9px",borderRadius:9,border:"none",background:"#dc2626",color:"white",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                      >Delete My Account</button>
+                        style={{flex:2,padding:"9px",borderRadius:9,border:"none",background:"#dc2626",color:"white",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Delete My Account</button>
                     </div>
                   </div>
                 )}
@@ -2962,25 +2777,14 @@ export default function App() {
         </div>
       )}
 
-      {/* ══ ADD ASSET PANEL ══ */}
       {addAssetOpen&&(
-        <AddAssetPanel
-          onAdd={addAsset}
-          onClose={()=>setAddAssetOpen(false)}
-          cur={cur}
-          accentPrimary={accentPrimary}
-          card={card} bdr={bdr} txt={txt} sub={sub}
-        />
+        <AddAssetPanel onAdd={addAsset} onClose={()=>setAddAssetOpen(false)}
+          cur={cur} accentPrimary={accentPrimary} card={card} bdr={bdr} txt={txt} sub={sub}/>
       )}
 
-      {/* ══ ADD LIABILITY PANEL ══ */}
       {addLiabOpen&&(
-        <AddLiabPanel
-          onAdd={addLiab}
-          onClose={()=>setAddLiabOpen(false)}
-          cur={cur}
-          card={card} bdr={bdr} txt={txt} sub={sub}
-        />
+        <AddLiabPanel onAdd={addLiab} onClose={()=>setAddLiabOpen(false)}
+          cur={cur} card={card} bdr={bdr} txt={txt} sub={sub}/>
       )}
     </div>
   );
