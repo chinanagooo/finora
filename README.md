@@ -44,14 +44,14 @@
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/chinanagooo/wealthwell-app.git
-cd wealthwell-app
+git clone https://github.com/chinanagooo/wealthwell-app3.git
+cd wealthwell-app3
 
 # 2. Build the Docker image
-docker build -t wealthwell-app .
+docker build -t wealthwell-app3 .
 
 # 3. Run the container
-docker run -p 8080:80 -d wealthwell-app
+docker run -p 8080:80 -d wealthwell-app3
 
 # 4. Open in browser
 # http://localhost:8080
@@ -61,7 +61,7 @@ docker run -p 8080:80 -d wealthwell-app
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/chinanagooo/wealthwell-app.git
+git clone https://github.com/chinanagooo/wealthwell-app3.git
 cd wealthwell-app
 
 # 2. Install dependencies
@@ -98,10 +98,10 @@ wealthwell-app/
 
 ```bash
 # Build image
-docker build -t wealthwell-app .
+docker build -t wealthwell-app3 .
 
 # Run container (port 8080)
-docker run -p 8080:80 -d wealthwell-app
+docker run -p 8080:80 -d wealthwell-app3
 
 # View running containers
 docker ps
@@ -113,12 +113,12 @@ docker stop <container_id>
 docker rm <container_id>
 
 # Remove image (before rebuilding)
-docker rmi wealthwell-app
+docker rmi wealthwell-app3
 
 # Rebuild after pulling changes
 git pull origin main
-docker build -t wealthwell-app .
-docker run -p 8080:80 -d wealthwell-app
+docker build -t wealthwell-app3 .
+docker run -p 8080:80 -d wealthwell-app3
 ```
 
 ---
