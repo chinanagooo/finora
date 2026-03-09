@@ -186,7 +186,7 @@ const computeWellness = (assets, liabs, profile) => {
   // ── 7. Income Stability Score: Conservative 85 | Balanced/Moderate 80 | Aggressive 60
   const incomeStability = risk === "Conservative" ? 85 : risk === "Aggressive" ? 60 : 80;
 
-  // ── 8. Wealth Wellness Score (overall)
+  // ── 8. Finora Wellness Score (overall)
   //    0.25×Liq + 0.20×Div + 0.15×Vol + 0.15×Debt + 0.10×Prot + 0.10×Beh + 0.05×Inc
   const overall = Math.round(
     0.25 * liquidity +
@@ -324,7 +324,7 @@ const buildActions = (scores, assets, liabs, profile) => {
       problem:"No critical issues detected across all 7 metrics",
       reason:"Your portfolio is well-balanced. Keep monitoring regularly.",
       action:"Review quarterly and rebalance if any category drifts beyond thresholds",
-      outcome:"Maintain current Wealth Wellness Score", impact:"Maintain" }
+      outcome:"Maintain current Finora Wellness Score", impact:"Maintain" }
   ];
 };
 
@@ -536,7 +536,7 @@ function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
 
       {/* Create account — small button top-right corner */}
       <div style={{ position:"absolute", top:20, right:24, display:"flex", alignItems:"center", gap:10 }}>
-        <span style={{ fontSize:11, color:"#9ca3af" }}>New to WealthWell?</span>
+        <span style={{ fontSize:11, color:"#9ca3af" }}>New to Finora?</span>
         <button onClick={onCreateAccount}
           style={{ padding:"7px 16px", borderRadius:99, border:"1.5px solid #dc2626",
             background:"transparent", color:"#dc2626", fontSize:11, fontWeight:700,
@@ -558,8 +558,8 @@ function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
             borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:19, boxShadow:"0 4px 14px rgba(220,38,38,0.35)" }}>⬡</div>
           <div>
-            <div style={{ fontSize:17, fontWeight:800, color:"#1a0505" }}>WealthWell</div>
-            <div style={{ fontSize:9, color:"#9ca3af", letterSpacing:.5 }}>WEALTH WELLNESS HUB · SG</div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#1a0505" }}>Finora</div>
+            <div style={{ fontSize:9, color:"#9ca3af", letterSpacing:.5 }}>FINANCIAL WELLNESS HUB · SG</div>
           </div>
         </div>
 
@@ -640,13 +640,28 @@ function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
 const TOTAL_STEPS = 6; // 1-6 (0 = welcome)
 
 function OB_Input({ label, value, onChange, type="text", placeholder="", required=false, hint="" }) {
+  const isNumeric = type === "number";
+  const handleChange = (e) => {
+    if (isNumeric) {
+      // Only allow digits and a single decimal point — no negatives, no 'e'
+      const v = e.target.value.replace(/[^0-9.]/g, "").replace(/^(\d*\.?\d*).*$/, "$1");
+      onChange(v);
+    } else {
+      onChange(e.target.value);
+    }
+  };
   return (
     <div style={{ marginBottom:14 }}>
       <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>
         {label}{required && <span style={{color:"#dc2626"}}> *</span>}
       </label>
       <input
-        type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+        type={isNumeric ? "text" : type}
+        inputMode={isNumeric ? "decimal" : undefined}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={isNumeric ? e=>{ if(["-","e","E","+"].includes(e.key)) e.preventDefault(); } : undefined}
+        placeholder={placeholder}
         style={{ width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
           background:"white", color:"#111827", fontSize:13, fontFamily:"'Sora',sans-serif",
           outline:"none", transition:"border-color 0.2s" }}
@@ -694,7 +709,7 @@ function OB_ProgressBar({ step }) {
   );
 }
 
-function OnboardingWizard({ onComplete }) {
+function OnboardingWizard({ onComplete, onBack }) {
   const [step, setStep] = useState(0);
 
   // Step 1 – Personal
@@ -820,8 +835,8 @@ function OnboardingWizard({ onComplete }) {
           borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center",
           fontSize:18, boxShadow:"0 4px 14px rgba(220,38,38,0.35)" }}>⬡</div>
         <div>
-          <div style={{ fontSize:18, fontWeight:800, color:"#1a0505" }}>WealthWell</div>
-          <div style={{ fontSize:10, color:"#9ca3af" }}>WEALTH WELLNESS HUB · SG</div>
+          <div style={{ fontSize:18, fontWeight:800, color:"#1a0505" }}>Finora</div>
+          <div style={{ fontSize:10, color:"#9ca3af" }}>FINANCIAL WELLNESS HUB · SG</div>
         </div>
       </div>
 
@@ -854,6 +869,13 @@ function OnboardingWizard({ onComplete }) {
             boxShadow:"0 6px 20px rgba(220,38,38,0.35)" }}>
             Get Started →
           </button>
+          {onBack && (
+            <button onClick={onBack} style={{ marginTop:10, width:"100%", padding:"11px", borderRadius:12,
+              border:"1px solid #e5e7eb", background:"transparent", color:"#6b7280",
+              fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"'Sora',sans-serif" }}>
+              ← Back to Sign In
+            </button>
+          )}
           <div style={{ marginTop:14, fontSize:11, color:"#9ca3af" }}>
             Takes about 3 minutes · All data stays on your device
           </div>
@@ -1261,8 +1283,8 @@ function OnboardingWizard({ onComplete }) {
         return (
           <div style={{ ...cardStyle, textAlign:"center" }}>
             <div style={{ fontSize:11, fontWeight:700, color:"#dc2626", letterSpacing:1, textTransform:"uppercase", marginBottom:12 }}>Setup Complete!</div>
-            <h2 style={{ fontSize:22, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Welcome to WealthWell, {firstName}!</h2>
-            <p style={{ fontSize:12, color:"#9ca3af", marginBottom:24 }}>Here's your initial Wealth Wellness snapshot.</p>
+            <h2 style={{ fontSize:22, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Welcome to Finora, {firstName}!</h2>
+            <p style={{ fontSize:12, color:"#9ca3af", marginBottom:24 }}>Here's your initial Finora Wellness snapshot.</p>
             <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}>
               <Ring score={scores.overall} size={130} dark={false}/>
             </div>
@@ -1287,7 +1309,7 @@ function OnboardingWizard({ onComplete }) {
             <button onClick={handleFinish}
               style={{ ...btnPrimary, width:"100%", padding:"14px", fontSize:14,
                 boxShadow:"0 6px 20px rgba(220,38,38,0.35)" }}>
-              Enter WealthWell →
+              Enter Finora →
             </button>
             <div style={{ marginTop:12, fontSize:10, color:"#9ca3af" }}>Your data is saved locally. You can edit everything inside the app.</div>
           </div>
@@ -1395,8 +1417,9 @@ function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub
               <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Value ({cur.code}) *</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:12,fontWeight:700,color:catColor}}>{cur.symbol}</span>
-                <input ref={valRef} type="number" min="0" defaultValue="" placeholder="0.00"
-                  onChange={refreshPreview}
+                <input ref={valRef} type="text" inputMode="decimal" defaultValue="" placeholder="0.00"
+                  onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");e.target.value=v;refreshPreview();}}
+                  onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                   style={{width:"100%",padding:"10px 13px 10px 30px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
               </div>
             </div>
@@ -1517,8 +1540,9 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
               <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Total ({cur.code}) *</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:700,color:"#ef4444"}}>{cur.symbol}</span>
-                <input ref={totalRef} type="number" min="0" defaultValue="" placeholder="0"
-                  onChange={refreshPreview}
+                <input ref={totalRef} type="text" inputMode="decimal" defaultValue="" placeholder="0"
+                  onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");e.target.value=v;refreshPreview();}}
+                  onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                   style={{width:"100%",padding:"10px 10px 10px 26px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
               </div>
             </div>
@@ -1526,7 +1550,9 @@ function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
               <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Monthly ({cur.code})</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:700,color:"#f97316"}}>{cur.symbol}</span>
-                <input ref={monthlyRef} type="number" min="0" defaultValue="" placeholder="0"
+                <input ref={monthlyRef} type="text" inputMode="decimal" defaultValue="" placeholder="0"
+                  onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");e.target.value=v;}}
+                  onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                   style={{width:"100%",padding:"10px 10px 10px 26px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
               </div>
             </div>
@@ -1827,9 +1853,10 @@ export default function App() {
     if (a) { setDone(d=>[{...a,doneAt:new Date().toLocaleDateString("en-SG")},...d].slice(0,5)); setActions(ac=>ac.filter(x=>x.id!==id)); setCardIdx(0); }
   };
   const addExpense = () => {
-    if (!newExpense.name || !newExpense.amount) return;
+    const amt = parseFloat(newExpense.amount);
+    if (!newExpense.name || !newExpense.amount || isNaN(amt) || amt <= 0) return;
     setExpenses(ex=>[{id:Date.now(),name:newExpense.name,category:newExpense.category,
-      amount:parseFloat(newExpense.amount),
+      amount:amt,
       time:new Date().toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"}),date:"today"},...ex]);
     setNewExpense({name:"",category:"Food & Drink",amount:""});
     setAddExpOpen(false);
@@ -1861,7 +1888,7 @@ export default function App() {
     </div>
   );
   // New user clicked "Create Account" — show questionnaire
-  if (!loggedIn && !showLogin) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
+  if (!loggedIn && !showLogin) return <OnboardingWizard onComplete={handleOnboardingComplete} onBack={()=>setShowLogin(true)}/>;
   // Always show login screen first for everyone (new and returning users)
   if (!loggedIn) return (
     <LoginScreen
@@ -1901,7 +1928,7 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:15}}>
             <div style={{width:32,height:32,background:"rgba(255,255,255,0.16)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>⬡</div>
             <div>
-              <div style={{fontSize:13,fontWeight:800,color:"white"}}>WealthWell</div>
+              <div style={{fontSize:13,fontWeight:800,color:"white"}}>Finora</div>
               <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>Financial Hub · SG</div>
             </div>
           </div>
@@ -2002,7 +2029,7 @@ export default function App() {
                 <div className="hov" style={{background:card,borderRadius:15,padding:18,border:`1px solid ${bdr}`,display:"flex",gap:16,alignItems:"center",transition:"all .3s"}}>
                   <Ring score={wellness} size={115} dark={false}/>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:800,color:txt,marginBottom:2}}>Wealth Wellness Score</div>
+                    <div style={{fontSize:13,fontWeight:800,color:txt,marginBottom:2}}>Finora Wellness Score</div>
                     <div style={{fontSize:10,color:sub,marginBottom:8}}>Based on 7 financial health metrics</div>
                     {METRICS.slice(0,3).map((m,i)=>(
                       <div key={i} style={{marginBottom:6}}>
@@ -2308,7 +2335,7 @@ export default function App() {
                               <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
                               <span style={{fontSize:10,fontWeight:700,color:"#64748b",letterSpacing:1,textTransform:"uppercase"}}>Statement of Financial Position</span>
                             </div>
-                            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>{profile.name||"WealthWell User"}</div>
+                            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>{profile.name||"Finora User"}</div>
                             <div style={{fontSize:10,color:"#64748b",marginTop:2}}>As at {bsDate} · All figures in {cur.code}</div>
                           </div>
                           <div style={{textAlign:"right"}}>
@@ -2387,7 +2414,7 @@ export default function App() {
 
                         {/* Footer note */}
                         <div style={{marginTop:14,paddingTop:10,borderTop:"1px solid #e2e8f0",fontSize:9,color:"#94a3b8",display:"flex",justifyContent:"space-between"}}>
-                          <span>Generated by WealthWell Pro · {bsDate}</span>
+                          <span>Generated by Finora Pro · {bsDate}</span>
                           <span>All figures are self-reported estimates · Not a substitute for professional financial advice</span>
                         </div>
                       </div>
@@ -2869,13 +2896,25 @@ export default function App() {
                 ].map(f=>(
                   <div key={f.k} style={{marginBottom:10}}>
                     <Lbl>{f.l}</Lbl>
-                    <input type={f.t} value={editP[f.k]||""} onChange={e=>setEditP(p=>({...p,[f.k]:f.t==="number"?parseFloat(e.target.value)||0:e.target.value}))}
+                    <input
+                      type={f.t==="number"?"text":f.t}
+                      inputMode={f.t==="number"?"decimal":undefined}
+                      value={editP[f.k]||""}
+                      onChange={e=>{
+                        if(f.t==="number"){
+                          const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
+                          setEditP(p=>({...p,[f.k]:v}));
+                        } else {
+                          setEditP(p=>({...p,[f.k]:e.target.value}));
+                        }
+                      }}
+                      onKeyDown={f.t==="number"?e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}:undefined}
                       style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
                   </div>
                 ))}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:6}}>
                   <button onClick={()=>setProfileEdit(false)} style={{padding:"9px",background:"transparent",border:`1px solid ${bdr}`,borderRadius:9,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
-                  <button onClick={()=>{setProfile({...editP});setProfileEdit(false);}} style={{padding:"9px",background:`linear-gradient(135deg,${accentPrimary},#6366f1)`,color:"white",border:"none",borderRadius:9,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Save Changes</button>
+                  <button onClick={()=>{setProfile({...editP,salary:parseFloat(editP.salary)||0,monthlyExpenses:parseFloat(editP.monthlyExpenses)||0,insuranceCoverage:parseFloat(editP.insuranceCoverage)||0});setProfileEdit(false);}} style={{padding:"9px",background:`linear-gradient(135deg,${accentPrimary},#6366f1)`,color:"white",border:"none",borderRadius:9,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Save Changes</button>
                 </div>
               </>
             ) : (
