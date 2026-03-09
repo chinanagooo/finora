@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 
 // ─── STORAGE KEY ─────────────────────────────────────────────────────────────
-const STORAGE_KEY = "wealthwell_v1";
+const STORAGE_KEY = "finora_v1";
 
 // ─── CURRENCIES ───────────────────────────────────────────────────────────────
 const CURRENCIES = [

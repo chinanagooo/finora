@@ -1,17 +1,28 @@
-# Step 1: build stage
-FROM node:20 AS build
+# ── Stage 1: Build ──────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+LABEL app="finora"
 
 WORKDIR /app
+
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
 RUN npm run build
 
-# Step 2: production server
+# ── Stage 2: Serve ───────────────────────────────────────────────────────────
 FROM nginx:alpine
 
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# SPA fallback — redirect all routes to index.html
+RUN echo 'server { \
+  listen 80; \
+  root /usr/share/nginx/html; \
+  index index.html; \
+  location / { try_files $uri $uri/ /index.html; } \
+}' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
