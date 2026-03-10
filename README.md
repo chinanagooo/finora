@@ -42,6 +42,47 @@ npm run dev
 
 ---
 
+---
+
+## Available Scripts
+
+```bash
+npm run dev      # Vite dev server with HMR at localhost:5173
+npm run build    # Production build → /dist (used inside Docker)
+npm run preview  # Preview the production /dist build locally
+npm run lint     # ESLint check across all source files
+```
+
+---
+
+## Docker Reference
+
+```bash
+# Build
+docker build -t finora .
+
+# Run (detached, named)
+docker run -p 8080:80 -d --name finora finora
+
+# List running containers
+docker ps
+
+# Stop the container
+docker stop finora
+
+# Remove the container
+docker rm finora
+
+# Rebuild after a code change
+docker stop finora
+docker rm finora
+docker rmi finora
+docker build -t finora .
+docker run -p 8080:80 -d --name finora finora
+```
+
+---
+
 ## Authentication Flow
 
 Finora uses a lightweight browser-side auth layer:
@@ -276,47 +317,6 @@ finora/
 **No routing library.** Screen navigation uses a single `screen` state string. The sidebar updates this string; the main panel conditionally renders the matching screen. This keeps bundle size minimal.
 
 **Sign out without data loss.** `setLoggedIn(false)` returns the user to the login screen while leaving all `localStorage` data intact. Account deletion is a separate, password-gated action in the Trust Centre.
-
----
-
-## Available Scripts
-
-```bash
-npm run dev      # Vite dev server with HMR at localhost:5173
-npm run build    # Production build → /dist (used inside Docker)
-npm run preview  # Preview the production /dist build locally
-npm run lint     # ESLint check across all source files
-```
-
----
-
-## Docker Reference
-
-```bash
-# Build
-docker build -t finora .
-
-# Run (detached, named)
-docker run -p 8080:80 -d --name finora finora
-
-# List running containers
-docker ps
-
-# Stop the container
-docker stop finora
-
-# Remove the container
-docker rm finora
-
-# Rebuild after a code change
-docker stop finora
-docker rm finora
-docker rmi finora
-docker build -t finora .
-docker run -p 8080:80 -d --name finora finora
-```
-
----
 
 ## Application Screens
 
