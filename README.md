@@ -2,8 +2,6 @@
 
 > Your complete financial command centre. Track every asset, stress-test every scenario, and take action on what matters.
 
-Developed by the **TechTitans** team for the **NTU Fintech Innovators' Hackathon**.
-
 ---
 
 ## Getting Started
