@@ -4,6 +4,8 @@
 
 ---
 
+Group Members: Senthil, Javier, Josiah, Sonika, Jeny
+
 ## Getting Started
 
 ### Option A — Docker (Recommended)
