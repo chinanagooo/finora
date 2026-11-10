@@ -1,6 +1,7 @@
 # Finora — Wealth Wellness Hub
 
 > Your complete financial command centre. Track every asset, stress-test every scenario, and take action on what matters.
+> Helps to build a complete summary of your assets, liability and equity to help make informed investment and financial decisions.
 
 ---
 
