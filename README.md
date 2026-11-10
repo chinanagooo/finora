@@ -107,7 +107,7 @@ Passwords are stored as `btoa(unescape(encodeURIComponent(password)))`. There is
 
 ---
 
-## Live Features
+## [Live Features]
 
 ### Onboarding Wizard
 
