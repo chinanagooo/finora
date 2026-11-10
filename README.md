@@ -341,7 +341,7 @@ To sign out without losing data, use the **Sign Out** button at the bottom of th
 
 To permanently erase all data, use **Delete Account** in the Trust Centre (password required). This action is irreversible.
 
----
+----
 
 ## Contributing
 
@@ -351,7 +351,7 @@ To permanently erase all data, use **Delete Account** in the Trust Centre (passw
 4. Push: `git push origin feat/your-feature`
 5. Open a Pull Request against `master`
 
----
+----
 
 ## About
 
